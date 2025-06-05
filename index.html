@@ -1,94 +1,814 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pham Tuan Anh - Backend Developer</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình khám phá Tương tác: Phân tích Log với Elastic Stack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony Neutrals (#f8f7f4, #3a3a3a, #a3b8c2, #d8c3a5, #8e8d8a, #e98074) -->
+    <!-- Application Structure Plan: A task-oriented, single-page dashboard guiding users through the log analysis lifecycle (Collection -> Processing/Storage -> Analysis). It uses an interactive flowchart for overview, a tool selector for collection, a simulated debugger for processing, and a dynamic dashboard for analysis. This structure prioritizes hands-on learning and exploration over passive reading, making complex concepts more digestible and engaging for the user. -->
+    <!-- Visualization & Content Choices:
+        - Report Info: Overall log analysis workflow. Goal: Orient user. Viz: Interactive HTML/CSS flowchart. Interaction: Hover/click to reveal info & navigate. Justification: Provides a mental model of the entire process upfront. Library: Vanilla JS.
+        - Report Info: Comparison of log shippers (Filebeat, Logstash, etc.). Goal: Compare options. Viz: Interactive comparison table & Chart.js Bar Chart. Interaction: Select criteria to highlight tools. Justification: Helps users make an informed choice based on their needs. Library: Chart.js, Vanilla JS.
+        - Report Info: Logstash Grok parsing. Goal: Explain a complex concept. Viz: Simulated Grok Debugger (HTML form). Interaction: User enters data/pattern, sees live result. Justification: Active learning is far more effective than static explanation for a technical task. Library: Vanilla JS.
+        - Report Info: ILM Hot/Warm/Cold phases. Goal: Show change over time. Viz: HTML/CSS timeline diagram. Interaction: Hover over phases. Justification: Visually represents a time-based process effectively. Library: Vanilla JS.
+        - Report Info: Kibana analysis (error rates, top IPs). Goal: Simulate analysis. Viz: Interactive dashboard with Chart.js charts (Line, Bar, Pie, Table). Interaction: User selects filters from a dropdown to update all charts. Justification: Demonstrates the end-result and power of the system in a dynamic, hands-on way. Library: Chart.js, Vanilla JS.
+        - Report Info: Best practices. Goal: Inform/summarize. Viz: Accordion list. Interaction: Click to expand. Justification: Presents dense info in a compact, organized manner. Library: Vanilla JS.
+        -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4;
+            color: #3a3a3a;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .nav-link {
+            transition: color 0.3s, border-color 0.3s;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #e98074;
+            border-bottom-color: #e98074;
+        }
+        .flowchart-node {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .flowchart-node:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .flowchart-arrow {
+            font-size: 2rem;
+            color: #a3b8c2;
+        }
+        .custom-tab {
+            transition: all 0.3s;
+            border-bottom: 2px solid transparent;
+        }
+        .custom-tab.active {
+            border-bottom-color: #e98074;
+            color: #e98074;
+            font-weight: 600;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out;
+        }
+    </style>
 </head>
-<body>
-  <div class="container">
-    <header>
-      <h1>Pham Tuan Anh</h1>
-      <p>Email: <a href="mailto:ptanh01230@gmail.com">ptanh01230@gmail.com</a> | Phone: (+84) 378104323</p>
-      <p>Backend Java Developer - Hanoi, Vietnam</p>
+<body class="antialiased">
+
+    <header class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <h1 class="text-xl font-bold text-gray-800">🚀 Elastic Log Explorer</h1>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#overview" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Tổng quan</a>
+                        <a href="#collection" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Thu thập Log</a>
+                        <a href="#processing" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Xử lý & Lưu trữ</a>
+                        <a href="#analysis" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Phân tích</a>
+                        <a href="#best-practices" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Thực hành tốt nhất</a>
+                    </div>
+                </div>
+                 <div class="md:hidden">
+                    <button id="mobile-menu-button" class="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100">
+                        <span class="sr-only">Open main menu</span>
+                        <div id="hamburger-icon">
+                            <div class="w-6 h-0.5 bg-gray-600 mb-1.5"></div>
+                            <div class="w-6 h-0.5 bg-gray-600 mb-1.5"></div>
+                            <div class="w-6 h-0.5 bg-gray-600"></div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div id="mobile-menu" class="md:hidden hidden pb-3">
+                <a href="#overview" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Tổng quan</a>
+                <a href="#collection" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Thu thập Log</a>
+                <a href="#processing" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Xử lý & Lưu trữ</a>
+                <a href="#analysis" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Phân tích</a>
+                <a href="#best-practices" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Thực hành tốt nhất</a>
+            </div>
+        </nav>
     </header>
 
-    <section>
-      <h2>🎓 Education</h2>
-      <p><strong>Hanoi University of Science and Technology (HUST)</strong></p>
-      <p>School of Applied Mathematics and Informatics<br>Aug 2019 – Feb 2025</p>
-      <p><em>Degree Classification: Good.</em></p>
-    </section>
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+        
+        <!-- Section: Overview -->
+        <section id="overview" class="mb-16 md:mb-24 text-center scroll-mt-20">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Hành trình của Dữ liệu Log</h2>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12">Khám phá cách Elastic Stack biến những dòng log thô từ hệ thống của bạn thành những insight giá trị. Mỗi bước trong quy trình đều đóng vai trò quan trọng. Hãy nhấp vào từng giai đoạn để tìm hiểu thêm.</p>
+            <div class="flex flex-col md:flex-row items-center justify-center space-y-8 md:space-y-0 md:space-x-4">
+                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#collection">
+                    <div class="text-4xl mb-3">📄</div>
+                    <h3 class="text-lg font-semibold">1. Thu thập</h3>
+                    <p class="text-sm text-gray-500">Gom log từ mọi nguồn.</p>
+                </div>
+                <div class="flowchart-arrow transform md:rotate-0 rotate-90">→</div>
+                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#processing">
+                    <div class="text-4xl mb-3">⚙️</div>
+                    <h3 class="text-lg font-semibold">2. Xử lý</h3>
+                    <p class="text-sm text-gray-500">Chuẩn hóa & làm giàu dữ liệu.</p>
+                </div>
+                <div class="flowchart-arrow transform md:rotate-0 rotate-90">→</div>
+                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#processing">
+                     <div class="text-4xl mb-3">🗄️</div>
+                    <h3 class="text-lg font-semibold">3. Lưu trữ</h3>
+                    <p class="text-sm text-gray-500">Lập chỉ mục trong Elasticsearch.</p>
+                </div>
+                <div class="flowchart-arrow transform md:rotate-0 rotate-90">→</div>
+                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#analysis">
+                    <div class="text-4xl mb-3">📊</div>
+                    <h3 class="text-lg font-semibold">4. Phân tích</h3>
+                    <p class="text-sm text-gray-500">Trực quan hóa với Kibana.</p>
+                </div>
+            </div>
+        </section>
 
-    <section>
-      <h2>🏅 Honors & Awards</h2>
-      <ul>
-        <li>Samsung R&D Center Vietnam – STC Pro certificate.</li>
-      </ul>
-    </section>
+        <!-- Section: Collection -->
+        <section id="collection" class="mb-16 md:mb-24 scroll-mt-20">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Giai đoạn 1: Lựa chọn Công cụ Thu thập Log</h2>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Bước đầu tiên là đưa log từ các hệ thống của bạn vào Elastic. Việc lựa chọn công cụ phù hợp phụ thuộc vào nhu cầu của bạn về hiệu năng và khả năng xử lý.</p>
+            <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4">So sánh các Công cụ Thu thập</h3>
+                        <p class="text-gray-600 mb-6">Mỗi công cụ có điểm mạnh riêng. Filebeat nhẹ nhàng, Logstash mạnh mẽ trong xử lý, và Elastic Agent mang đến giải pháp hợp nhất.</p>
+                        <div class="chart-container">
+                            <canvas id="collectorChart"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4">Cấu hình Mẫu</h3>
+                        <div class="border-b border-gray-200 mb-4">
+                            <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                                <button class="custom-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm active" data-tab="filebeat">Filebeat</button>
+                                <button class="custom-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm" data-tab="logstash">Logstash</button>
+                                <button class="custom-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm" data-tab="agent">Elastic Agent</button>
+                            </nav>
+                        </div>
+                        <div id="tab-content">
+                            <!-- Filebeat Content -->
+                            <div class="tab-pane active" id="filebeat-content">
+                                <p class="text-gray-600 mb-4">Filebeat là lựa chọn lý tưởng để chuyển tiếp log từ nhiều máy chủ với tài nguyên tối thiểu. Sử dụng các module để tự động phân tích các định dạng log phổ biến.</p>
+                                <select id="filebeat-log-type" class="w-full p-2 border rounded-md mb-2 bg-gray-50">
+                                    <option value="nginx">Log Nginx</option>
+                                    <option value="apache">Log Apache</option>
+                                    <option value="json">Log JSON Tùy chỉnh</option>
+                                </select>
+                                <pre class="bg-gray-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code id="filebeat-code"></code></pre>
+                            </div>
+                             <!-- Logstash Content -->
+                            <div class="tab-pane hidden" id="logstash-content">
+                                <p class="text-gray-600 mb-4">Logstash là một pipeline xử lý mạnh mẽ, cho phép bạn phân tích, làm giàu và biến đổi log trước khi gửi đến Elasticsearch. Rất linh hoạt nhờ hệ thống plugin phong phú.</p>
+                                <select id="logstash-log-type" class="w-full p-2 border rounded-md mb-2 bg-gray-50">
+                                    <option value="apache">Phân tích Log Apache</option>
+                                    <option value="syslog">Nhận Syslog</option>
+                                    <option value="beats">Nhận từ Filebeat</option>
+                                </select>
+                                <pre class="bg-gray-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code id="logstash-code"></code></pre>
+                            </div>
+                            <!-- Elastic Agent Content -->
+                            <div class="tab-pane hidden" id="agent-content">
+                                <p class="text-gray-600 mb-4">Elastic Agent là một agent hợp nhất cho logs, metrics, và security data. Quản lý tập trung qua Fleet giúp đơn giản hóa việc triển khai và nâng cấp.</p>
+                                <p class="text-gray-600 mb-2">Cấu hình cho Elastic Agent thường được quản lý thông qua giao diện của Kibana (Fleet) thay vì các file YAML tĩnh, giúp đơn giản hóa việc thiết lập cho các dịch vụ phổ biến như Nginx, System, Docker...</p>
+                                <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                                    <div class="flex">
+                                        <div class="flex-shrink-0">
+                                            <span class="text-2xl">💡</span>
+                                        </div>
+                                        <div class="ml-3">
+                                            <p class="text-sm text-blue-700">
+                                            Với Elastic Agent, bạn chỉ cần chọn "Integration" (ví dụ: Nginx) trong Fleet, cung cấp đường dẫn log, và Agent sẽ tự động áp dụng cấu hình, pipeline xử lý và dashboard tương ứng.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-    <section>
-      <h2>💼 Experience</h2>
-      <div class="job">
-        <h3>Samsung R&D Center Vietnam</h3>
-        <p><strong>Engineer - Backend Server</strong> (Mar 2024 – Feb 2025)</p>
-        <ul>
-          <li>Develop and maintain backend services, ensuring high availability, scalability, and performance.</li>
-          <li>Design and implement RESTful APIs and microservices.</li>
-          <li>Optimize database performance and manage transactions.</li>
-          <li>Implement authentication and authorization with best practices.</li>
-          <li>Collaborate with frontend and DevOps teams.</li>
-        </ul>
-      </div>
-      <div class="job">
-        <h3>Falcon Game Studio</h3>
-        <p><strong>Intern - Data Engineer</strong> (Aug 2023 – Oct 2023)</p>
-        <ul>
-          <li>Learned Java programming and Spring Boot.</li>
-          <li>Worked with Spring MVC, JPA, Security.</li>
-          <li>Integrated backend with relational databases.</li>
-        </ul>
-      </div>
-    </section>
+        <!-- Section: Processing & Storage -->
+        <section id="processing" class="mb-16 md:mb-24 scroll-mt-20">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Giai đoạn 2: Xử lý và Lưu trữ Dữ liệu</h2>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Đây là bước biến dữ liệu thô thành thông tin có cấu trúc. Chúng ta sẽ khám phá cách phân tích log với Grok và quản lý vòng đời dữ liệu với ILM.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Grok Parser -->
+                <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+                    <h3 class="text-xl font-semibold mb-4">Thử nghiệm Grok Parser</h3>
+                    <p class="text-gray-600 mb-4">Grok cho phép bạn đặt tên cho các mẫu có sẵn để phân tích cú pháp log. Hãy thử với một dòng log Apache và xem kết quả.</p>
+                    <div class="mb-4">
+                        <label for="grok-input" class="block text-sm font-medium text-gray-700">Dòng Log Mẫu (Apache Common Log)</label>
+                        <textarea id="grok-input" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326</textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label for="grok-pattern" class="block text-sm font-medium text-gray-700">Mẫu Grok</label>
+                         <input id="grok-pattern" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value="%{IPORHOST:clientip} %{USER:ident} %{USER:auth} \[%{HTTPDATE:timestamp}\] \"(?:%{WORD:verb} %{NOTSPACE:request}(?: HTTP/%{NUMBER:httpversion})?|%{DATA:rawrequest})\" %{NUMBER:response:int} (?:-|%{NUMBER:bytes:int})">
+                    </div>
+                    <button id="grok-parse-btn" class="w-full bg-[#d8c3a5] hover:bg-[#c9b494] text-white font-bold py-2 px-4 rounded-lg transition-colors">Phân tích (Parse)</button>
+                    <div class="mt-4">
+                        <h4 class="font-semibold">Kết quả JSON:</h4>
+                        <pre class="bg-gray-800 text-white p-4 rounded-md text-sm overflow-x-auto mt-2"><code id="grok-output">{"message": "Hãy nhấn nút Phân tích"}</code></pre>
+                    </div>
+                </div>
 
-    <section>
-      <h2>📁 Projects</h2>
-      <div class="project">
-        <h3>Monitoring and Operating Smart System (MOSS) – Samsung R&D Center Vietnam (2024)</h3>
-        <ul>
-          <li>Built a microservices-based backend system using Java Spring Boot.</li>
-          <li>Implemented REST APIs, RBAC, JWT, and PostgreSQL.</li>
-          <li>Used Spring Cloud (Eureka, Config Server, API Gateway).</li>
-          <li>Deployed using Kubernetes.</li>
-        </ul>
-      </div>
-      <div class="project">
-        <h3>Learning Support Website – HUST (2024)</h3>
-        <ul>
-          <li>Web system using Java Spring Boot for managing educational content.</li>
-          <li>User management, role-based access control, exam module, document management, forum.</li>
-          <li>Used Spring Security, JWT, MySQL.</li>
-        </ul>
-      </div>
-    </section>
+                <!-- ILM -->
+                <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+                    <h3 class="text-xl font-semibold mb-4">Vòng đời Dữ liệu Log (ILM)</h3>
+                    <p class="text-gray-600 mb-6">Dữ liệu log không cần lưu trữ mãi mãi với hiệu năng cao nhất. ILM tự động di chuyển dữ liệu qua các tầng để tối ưu chi phí và hiệu suất. Di chuột qua các giai đoạn để xem chi tiết.</p>
+                    <div class="space-y-4">
+                        <div class="ilm-phase relative p-4 bg-red-100 border-l-4 border-red-500 rounded-r-lg">
+                            <h4 class="font-bold text-red-800">🔥 HOT</h4>
+                            <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
+                                <h5 class="font-bold mb-2">Tối ưu cho Ghi & Truy vấn</h5>
+                                <p class="text-sm text-gray-600">Dữ liệu được ghi và truy vấn liên tục. Yêu cầu hiệu năng cao nhất. Thường lưu trên SSD.</p>
+                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `rollover` (tạo index mới khi đầy).</p>
+                            </div>
+                        </div>
+                        <div class="ilm-phase relative p-4 bg-yellow-100 border-l-4 border-yellow-500 rounded-r-lg">
+                            <h4 class="font-bold text-yellow-800">🌤️ WARM</h4>
+                            <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
+                                <h5 class="font-bold mb-2">Tối ưu cho Lưu trữ</h5>
+                                <p class="text-sm text-gray-600">Dữ liệu ít được truy vấn, chỉ đọc. Có thể chuyển sang phần cứng rẻ hơn.</p>
+                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `shrink` (giảm shard), `forcemerge` (gộp segment).</p>
+                            </div>
+                        </div>
+                        <div class="ilm-phase relative p-4 bg-blue-100 border-l-4 border-blue-500 rounded-r-lg">
+                            <h4 class="font-bold text-blue-800">❄️ COLD</h4>
+                             <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
+                                <h5 class="font-bold mb-2">Lưu trữ Dài hạn</h5>
+                                <p class="text-sm text-gray-600">Dữ liệu rất hiếm khi truy cập. Giảm thiểu tài nguyên sử dụng.</p>
+                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `freeze` (đóng băng index), `searchable snapshots`.</p>
+                            </div>
+                        </div>
+                         <div class="ilm-phase relative p-4 bg-gray-200 border-l-4 border-gray-500 rounded-r-lg">
+                            <h4 class="font-bold text-gray-800">🗑️ DELETE</h4>
+                             <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
+                                <h5 class="font-bold mb-2">Xóa Dữ liệu</h5>
+                                <p class="text-sm text-gray-600">Tự động xóa index sau một khoảng thời gian nhất định để giải phóng dung lượng.</p>
+                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `delete`.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-    <section>
-      <h2>🛠 Technical Skills</h2>
-      <ul>
-        <li><strong>Languages:</strong> Vietnamese (native), English (VSTEP B2)</li>
-        <li><strong>Programming:</strong> Java</li>
-        <li><strong>Frameworks:</strong> Spring Boot, JPA, Security, Cloud</li>
-        <li><strong>Messaging/Caching:</strong> Kafka, Redis</li>
-        <li><strong>Tools:</strong> Git, Docker, Postman, Latex, MS Office</li>
-        <li><strong>Databases:</strong> PostgreSQL, MySQL</li>
-        <li><strong>OS:</strong> Linux (Ubuntu), Windows</li>
-      </ul>
-    </section>
+        <!-- Section: Analysis -->
+        <section id="analysis" class="mb-16 md:mb-24 scroll-mt-20">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Giai đoạn 3: Phân tích & Trực quan hóa với Kibana</h2>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Đây là lúc sức mạnh của Elastic Stack tỏa sáng. Khám phá dashboard mô phỏng dưới đây để xem cách dữ liệu log được biến thành các biểu đồ và insight hữu ích.</p>
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <div class="flex flex-col md:flex-row items-center p-4 border-b border-gray-200 mb-6 bg-gray-50 rounded-t-lg">
+                     <label for="kibana-filter" class="flex-shrink-0 mr-3 font-semibold text-gray-700">Bộ lọc (KQL):</label>
+                     <select id="kibana-filter" class="w-full md:w-auto p-2 border rounded-md bg-white">
+                         <option value="*">Tất cả Log</option>
+                         <option value="http.response.status_code >= 500">Chỉ Lỗi Server (5xx)</option>
+                         <option value="log.level: ERROR">Chỉ Log Level ERROR</option>
+                         <option value="http.request.method: POST">Chỉ Request POST</option>
+                     </select>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Log Volume -->
+                    <div class="col-span-1 md:col-span-2 lg:col-span-3 bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">Khối lượng Log theo Thời gian</h3>
+                        <div class="chart-container">
+                            <canvas id="logVolumeChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Status Codes -->
+                    <div class="col-span-1 lg:col-span-1 bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">Phân bổ Mã Trạng thái HTTP</h3>
+                        <div class="chart-container">
+                            <canvas id="statusCodesChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Log Levels -->
+                     <div class="col-span-1 lg:col-span-1 bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">Phân bổ Cấp độ Log</h3>
+                         <div class="chart-container">
+                            <canvas id="logLevelsChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Top IPs -->
+                    <div class="col-span-1 lg:col-span-1 bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-2">Top 5 IP nguồn</h3>
+                        <div id="topIpsTable" class="space-y-2 pt-2"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Section: Best Practices -->
+        <section id="best-practices" class="scroll-mt-20">
+             <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Thực hành Tốt nhất</h2>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Để xây dựng một hệ thống phân tích log mạnh mẽ và bền vững, hãy tuân thủ các nguyên tắc cốt lõi sau.</p>
+            <div class="max-w-3xl mx-auto space-y-4">
+                <div class="accordion-item bg-white rounded-lg shadow">
+                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
+                        <span>📝 Ghi Log có Cấu trúc (Structured Logging)</span>
+                        <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
+                    </button>
+                    <div class="accordion-content px-5">
+                        <p class="py-4 text-gray-600">Thay vì ghi log dạng văn bản tự do, hãy sử dụng định dạng có cấu trúc như JSON. Điều này giúp loại bỏ bước phân tích cú pháp phức tạp, làm cho việc lập chỉ mục và tìm kiếm trở nên nhanh hơn và đáng tin cậy hơn rất nhiều. Đây là nền tảng cho một hệ thống logging hiệu quả.</p>
+                    </div>
+                </div>
+                 <div class="accordion-item bg-white rounded-lg shadow">
+                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
+                        <span>🏷️ Chuẩn hóa với Elastic Common Schema (ECS)</span>
+                         <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
+                    </button>
+                    <div class="accordion-content px-5">
+                        <p class="py-4 text-gray-600">Áp dụng ECS để chuẩn hóa tên trường trong dữ liệu của bạn (ví dụ: luôn dùng `client.ip` cho địa chỉ IP của client). Điều này giúp bạn dễ dàng tương quan dữ liệu từ các nguồn khác nhau và tận dụng các dashboard, rule được xây dựng sẵn trong Kibana.</p>
+                    </div>
+                </div>
+                 <div class="accordion-item bg-white rounded-lg shadow">
+                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
+                        <span>🔄 Tự động hóa Vòng đời Dữ liệu (ILM)</span>
+                         <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
+                    </button>
+                    <div class="accordion-content px-5">
+                        <p class="py-4 text-gray-600">Không phải tất cả dữ liệu đều cần được lưu trữ với chi phí và hiệu năng cao nhất. Hãy cấu hình Index Lifecycle Management (ILM) để tự động di chuyển dữ liệu cũ sang các tầng lưu trữ rẻ hơn (Warm, Cold) và cuối cùng là xóa chúng, giúp tiết kiệm chi phí đáng kể.</p>
+                    </div>
+                </div>
+                <div class="accordion-item bg-white rounded-lg shadow">
+                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
+                        <span>🔐 Bảo mật Hệ thống</span>
+                         <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
+                    </button>
+                    <div class="accordion-content px-5">
+                        <p class="py-4 text-gray-600">Bảo vệ dữ liệu log của bạn bằng cách bật xác thực và phân quyền (RBAC). Mã hóa giao tiếp giữa các thành phần trong stack bằng TLS/SSL. Đừng bỏ qua việc che giấu hoặc loại bỏ các thông tin nhạy cảm (PII) khỏi log trước khi lập chỉ mục.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-    <footer>
-      <p>© 2025 Pham Tuan Anh</p>
+    </main>
+
+    <footer class="bg-gray-800 text-white mt-16 md:mt-24">
+        <div class="container mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center">
+            <p>Tạo ra để khám phá sức mạnh của Elastic Stack.</p>
+        </div>
     </footer>
-  </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chartColors = {
+                blue: 'rgba(163, 184, 194, 0.7)',
+                tan: 'rgba(216, 195, 165, 0.7)',
+                coral: 'rgba(233, 128, 116, 0.7)',
+                gray: 'rgba(142, 141, 138, 0.7)',
+                blueBorder: 'rgb(163, 184, 194)',
+                tanBorder: 'rgb(216, 195, 165)',
+                coralBorder: 'rgb(233, 128, 116)',
+                grayBorder: 'rgb(142, 141, 138)',
+            };
+            
+            // --- Navigation Logic ---
+            const navLinks = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('main section');
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    // For mobile, close menu on click
+                    if (!mobileMenu.classList.contains('hidden')) {
+                         mobileMenu.classList.add('hidden');
+                    }
+                    // Smooth scroll for all nav links
+                    const targetId = link.getAttribute('href');
+                    if (targetId.startsWith('#')) {
+                        e.preventDefault();
+                        document.querySelector(targetId).scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+
+            // Active nav link on scroll
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        navLinks.forEach(link => {
+                            link.classList.remove('active');
+                            if (link.getAttribute('href').substring(1) === entry.target.id) {
+                                link.classList.add('active');
+                            }
+                        });
+                    }
+                });
+            }, { threshold: 0.5 });
+            sections.forEach(section => observer.observe(section));
+            
+            // --- Flowchart Logic ---
+            const flowchartNodes = document.querySelectorAll('.flowchart-node');
+            flowchartNodes.forEach(node => {
+                node.addEventListener('click', () => {
+                    const targetId = node.dataset.target;
+                    document.querySelector(targetId).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            });
+
+            // --- Collection Section Logic ---
+            const collectorChartCtx = document.getElementById('collectorChart').getContext('2d');
+            new Chart(collectorChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Filebeat', 'Logstash', 'Elastic Agent'],
+                    datasets: [{
+                        label: 'Sử dụng tài nguyên',
+                        data: [1, 3, 2], // 1: Low, 2: Medium, 3: High
+                        backgroundColor: chartColors.blue,
+                        borderColor: chartColors.blueBorder,
+                        borderWidth: 1
+                    }, {
+                        label: 'Khả năng biến đổi',
+                        data: [1.5, 3, 2.5], // 1: Basic, 2: Medium, 3: Rich
+                        backgroundColor: chartColors.tan,
+                        borderColor: chartColors.tanBorder,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    const labels = {0: 'Thấp', 1: 'Cơ bản', 2: 'Trung bình', 3: 'Cao/Phong phú'};
+                                    return labels[Math.round(value)] || '';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                       tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    const value = context.parsed.y;
+                                    const labels = {
+                                        'Sử dụng tài nguyên': {1: 'Thấp', 2: 'Trung bình', 3: 'Cao'},
+                                        'Khả năng biến đổi': {1.5: 'Cơ bản', 2.5: 'Trung bình', 3: 'Phong phú'}
+                                    }
+                                    label += labels[context.dataset.label][value];
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const tabs = document.querySelectorAll('.custom-tab');
+            const tabPanes = document.querySelectorAll('.tab-pane');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    const targetPaneId = tab.dataset.tab + '-content';
+                    tabPanes.forEach(pane => {
+                        if (pane.id === targetPaneId) {
+                            pane.classList.remove('hidden');
+                            pane.classList.add('active');
+                        } else {
+                            pane.classList.add('hidden');
+                            pane.classList.remove('active');
+                        }
+                    });
+                });
+            });
+
+            const filebeatCodeSnippets = {
+                nginx: `filebeat.modules:
+- module: nginx
+  access:
+    enabled: true
+    var.paths: ["/var/log/nginx/access.log*"]
+  error:
+    enabled: true
+    var.paths: ["/var/log/nginx/error.log*"]
+
+output.elasticsearch:
+  hosts: ["es-host:9200"]`,
+                apache: `filebeat.modules:
+- module: apache
+  access:
+    enabled: true
+    var.paths: ["/var/log/apache2/access.log*"]
+  error:
+    enabled: true
+    var.paths: ["/var/log/apache2/error.log*"]
+
+output.elasticsearch:
+  hosts: ["es-host:9200"]`,
+                json: `filebeat.inputs:
+- type: log
+  paths:
+    - /var/log/my_app/json.log
+  processors:
+    - decode_json_fields:
+        fields: ["message"]
+        target: ""
+
+output.elasticsearch:
+  hosts: ["es-host:9200"]`
+            };
+            const filebeatLogType = document.getElementById('filebeat-log-type');
+            const filebeatCode = document.getElementById('filebeat-code');
+            filebeatLogType.addEventListener('change', (e) => {
+                filebeatCode.textContent = filebeatCodeSnippets[e.target.value];
+            });
+            filebeatCode.textContent = filebeatCodeSnippets.nginx;
+
+            const logstashCodeSnippets = {
+                apache: `input {
+  beats {
+    port => 5044
+  }
+}
+filter {
+  grok {
+    match => { "message" => "%{COMBINEDAPACHELOG}" }
+  }
+  geoip {
+    source => "clientip"
+  }
+}
+output {
+  elasticsearch {
+    hosts => ["http://es-host:9200"]
+    index => "weblogs-%{+YYYY.MM.dd}"
+  }
+}`,
+                syslog: `input {
+  syslog {
+    port => 514
+    type => "syslog"
+  }
+}
+filter {
+  grok {
+    match => { "message" => "<%{POSINT:syslog_pri}>%{SYSLOGTIMESTAMP:syslog_timestamp} %{DATA:syslog_program}: %{GREEDYDATA:syslog_message}" }
+  }
+}
+output {
+  elasticsearch {
+    hosts => ["http://es-host:9200"]
+    index => "syslog-%{+YYYY.MM.dd}"
+  }
+}`,
+                beats: `input {
+  beats {
+    port => 5044
+  }
+}
+# ... filter section depends on data from Beats ...
+filter {
+  if [fileset][name] == "nginx" {
+     # Nginx specific processing
+  }
+}
+output {
+  elasticsearch {
+    hosts => ["http://es-host:9200"]
+  }
+}`
+            };
+            const logstashLogType = document.getElementById('logstash-log-type');
+            const logstashCode = document.getElementById('logstash-code');
+            logstashLogType.addEventListener('change', (e) => {
+                logstashCode.textContent = logstashCodeSnippets[e.target.value];
+            });
+            logstashCode.textContent = logstashCodeSnippets.apache;
+
+            // --- Processing Section Logic ---
+            const grokInput = document.getElementById('grok-input');
+            const grokPattern = document.getElementById('grok-pattern');
+            const grokParseBtn = document.getElementById('grok-parse-btn');
+            const grokOutput = document.getElementById('grok-output');
+
+            grokParseBtn.addEventListener('click', () => {
+                // This is a simplified simulation
+                const log = grokInput.value;
+                if (log.includes('GET /apache_pb.gif HTTP/1.0')) {
+                    const result = {
+                        "clientip": "127.0.0.1",
+                        "ident": "-",
+                        "auth": "frank",
+                        "timestamp": "10/Oct/2000:13:55:36 -0700",
+                        "verb": "GET",
+                        "request": "/apache_pb.gif",
+                        "httpversion": "1.0",
+                        "response": 200,
+                        "bytes": 2326
+                    };
+                    grokOutput.textContent = JSON.stringify(result, null, 2);
+                } else {
+                    grokOutput.textContent = JSON.stringify({ "error": "Mẫu Grok không khớp với log đầu vào. Đây là một ví dụ mô phỏng." }, null, 2);
+                }
+            });
+
+            const ilmPhases = document.querySelectorAll('.ilm-phase');
+            ilmPhases.forEach(phase => {
+                const details = phase.querySelector('.ilm-details');
+                phase.addEventListener('mouseenter', () => {
+                    details.classList.remove('hidden');
+                });
+                phase.addEventListener('mouseleave', () => {
+                    details.classList.add('hidden');
+                });
+            });
+
+
+            // --- Analysis Section Logic ---
+            let logVolumeChart, statusCodesChart, logLevelsChart;
+            const kibanaFilter = document.getElementById('kibana-filter');
+
+            // Sample Data
+            const baseData = [
+                { time: '10:00', total: 120, status: {200: 100, 404: 15, 500: 5}, level: {INFO: 110, WARN: 5, ERROR: 5}, ip: '203.0.113.10', method: 'GET'},
+                { time: '10:05', total: 150, status: {200: 130, 404: 18, 503: 2}, level: {INFO: 140, WARN: 8, ERROR: 2}, ip: '198.51.100.25', method: 'GET'},
+                { time: '10:10', total: 135, status: {200: 110, 301: 20, 500: 5}, level: {INFO: 125, WARN: 5, ERROR: 5}, ip: '203.0.113.10', method: 'POST'},
+                { time: '10:15', total: 180, status: {200: 165, 404: 10, 500: 5}, level: {INFO: 170, WARN: 5, ERROR: 5}, ip: '192.0.2.44', method: 'GET'},
+                { time: '10:20', total: 250, status: {200: 220, 404: 25, 503: 5}, level: {INFO: 240, WARN: 5, ERROR: 5}, ip: '203.0.113.10', method: 'GET'},
+                { time: '10:25', total: 160, status: {200: 150, 404: 8, 500: 2}, level: {INFO: 150, WARN: 8, ERROR: 2}, ip: '198.51.100.25', method: 'POST'}
+            ];
+
+            const filterData = (filter) => {
+                if (filter === '*') return baseData;
+                if (filter === 'http.response.status_code >= 500') {
+                    return baseData.map(d => ({
+                        ...d, 
+                        total: (d.status['500'] || 0) + (d.status['503'] || 0)
+                    })).filter(d => d.total > 0);
+                }
+                if (filter === 'log.level: ERROR') {
+                    return baseData.map(d => ({...d, total: d.level.ERROR || 0})).filter(d => d.total > 0);
+                }
+                 if (filter === 'http.request.method: POST') {
+                    return baseData.filter(d => d.method === 'POST');
+                }
+                return baseData;
+            };
+
+            const updateCharts = (filter) => {
+                const data = filterData(filter);
+                
+                // Aggregate data for charts
+                const labels = data.map(d => d.time);
+                const volumeData = data.map(d => d.total);
+                
+                const statusCounts = data.reduce((acc, curr) => {
+                    for (const code in curr.status) {
+                        acc[code] = (acc[code] || 0) + curr.status[code];
+                    }
+                    return acc;
+                }, {});
+                
+                const levelCounts = data.reduce((acc, curr) => {
+                    for (const level in curr.level) {
+                        acc[level] = (acc[level] || 0) + curr.level[level];
+                    }
+                    return acc;
+                }, {});
+
+                const ipCounts = data.reduce((acc, curr) => {
+                    acc[curr.ip] = (acc[curr.ip] || 0) + 1;
+                    return acc;
+                }, {});
+                const topIps = Object.entries(ipCounts).sort(([,a],[,b]) => b-a).slice(0, 5);
+
+                // Update Log Volume Chart
+                logVolumeChart.data.labels = labels;
+                logVolumeChart.data.datasets[0].data = volumeData;
+                logVolumeChart.update();
+                
+                // Update Status Codes Chart
+                statusCodesChart.data.labels = Object.keys(statusCounts);
+                statusCodesChart.data.datasets[0].data = Object.values(statusCounts);
+                statusCodesChart.update();
+
+                // Update Log Levels Chart
+                logLevelsChart.data.labels = Object.keys(levelCounts);
+                logLevelsChart.data.datasets[0].data = Object.values(levelCounts);
+                logLevelsChart.data.datasets[0].backgroundColor = Object.keys(levelCounts).map(level => {
+                    if (level === 'ERROR') return chartColors.coral;
+                    if (level === 'WARN') return chartColors.tan;
+                    return chartColors.blue;
+                });
+                logLevelsChart.update();
+
+                // Update Top IPs Table
+                const topIpsTable = document.getElementById('topIpsTable');
+                topIpsTable.innerHTML = '';
+                topIps.forEach(([ip, count]) => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center text-sm p-2 rounded bg-white';
+                    row.innerHTML = `<span class="font-mono text-gray-700">${ip}</span><span class="font-semibold text-[#3a3a3a]">${count} requests</span>`;
+                    topIpsTable.appendChild(row);
+                });
+                if (topIps.length === 0) {
+                     topIpsTable.innerHTML = '<p class="text-sm text-gray-500 text-center p-4">Không có dữ liệu cho bộ lọc này.</p>';
+                }
+            };
+
+            const initCharts = () => {
+                // Log Volume Chart
+                const logVolumeCtx = document.getElementById('logVolumeChart').getContext('2d');
+                logVolumeChart = new Chart(logVolumeCtx, {
+                    type: 'line',
+                    data: { labels: [], datasets: [{ label: 'Số lượng Log', data: [], borderColor: chartColors.blueBorder, backgroundColor: chartColors.blue, tension: 0.1, fill: true }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+                });
+
+                // Status Codes Chart
+                const statusCtx = document.getElementById('statusCodesChart').getContext('2d');
+                statusCodesChart = new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: { labels: [], datasets: [{ label: 'Mã Trạng thái', data: [], backgroundColor: [chartColors.blue, chartColors.tan, chartColors.coral, chartColors.gray] }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // Log Levels Chart
+                const levelCtx = document.getElementById('logLevelsChart').getContext('2d');
+                logLevelsChart = new Chart(levelCtx, {
+                    type: 'pie',
+                    data: { labels: [], datasets: [{ label: 'Cấp độ Log', data: [], backgroundColor: [] }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+                
+                updateCharts('*');
+            };
+
+            kibanaFilter.addEventListener('change', (e) => {
+                updateCharts(e.target.value);
+            });
+            
+            initCharts();
+
+            // --- Accordion Logic ---
+            const accordionItems = document.querySelectorAll('.accordion-item');
+            accordionItems.forEach(item => {
+                const header = item.querySelector('.accordion-header');
+                const content = item.querySelector('.accordion-content');
+                const icon = item.querySelector('.accordion-icon');
+                header.addEventListener('click', () => {
+                    const isOpen = !content.style.maxHeight || content.style.maxHeight === '0px';
+                    // Close all others
+                    accordionItems.forEach(otherItem => {
+                        if (otherItem !== item) {
+                            otherItem.querySelector('.accordion-content').style.maxHeight = '0px';
+                            otherItem.querySelector('.accordion-icon').textContent = '+';
+                            otherItem.querySelector('.accordion-icon').classList.remove('rotate-45');
+                        }
+                    });
+
+                    if (isOpen) {
+                        content.style.maxHeight = content.scrollHeight + 'px';
+                        icon.textContent = '−';
+                        icon.classList.add('rotate-45');
+                    } else {
+                        content.style.maxHeight = '0px';
+                        icon.textContent = '+';
+                        icon.classList.remove('rotate-45');
+                    }
+                });
+            });
+
+        });
+    </script>
 </body>
 </html>
