@@ -3,811 +3,524 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trình khám phá Tương tác: Phân tích Log với Elastic Stack</title>
+    <title>Hướng Dẫn Tương Tác: JMS trong TIBCO BusinessWorks</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Calm Harmony Neutrals (#f8f7f4, #3a3a3a, #a3b8c2, #d8c3a5, #8e8d8a, #e98074) -->
-    <!-- Application Structure Plan: A task-oriented, single-page dashboard guiding users through the log analysis lifecycle (Collection -> Processing/Storage -> Analysis). It uses an interactive flowchart for overview, a tool selector for collection, a simulated debugger for processing, and a dynamic dashboard for analysis. This structure prioritizes hands-on learning and exploration over passive reading, making complex concepts more digestible and engaging for the user. -->
-    <!-- Visualization & Content Choices:
-        - Report Info: Overall log analysis workflow. Goal: Orient user. Viz: Interactive HTML/CSS flowchart. Interaction: Hover/click to reveal info & navigate. Justification: Provides a mental model of the entire process upfront. Library: Vanilla JS.
-        - Report Info: Comparison of log shippers (Filebeat, Logstash, etc.). Goal: Compare options. Viz: Interactive comparison table & Chart.js Bar Chart. Interaction: Select criteria to highlight tools. Justification: Helps users make an informed choice based on their needs. Library: Chart.js, Vanilla JS.
-        - Report Info: Logstash Grok parsing. Goal: Explain a complex concept. Viz: Simulated Grok Debugger (HTML form). Interaction: User enters data/pattern, sees live result. Justification: Active learning is far more effective than static explanation for a technical task. Library: Vanilla JS.
-        - Report Info: ILM Hot/Warm/Cold phases. Goal: Show change over time. Viz: HTML/CSS timeline diagram. Interaction: Hover over phases. Justification: Visually represents a time-based process effectively. Library: Vanilla JS.
-        - Report Info: Kibana analysis (error rates, top IPs). Goal: Simulate analysis. Viz: Interactive dashboard with Chart.js charts (Line, Bar, Pie, Table). Interaction: User selects filters from a dropdown to update all charts. Justification: Demonstrates the end-result and power of the system in a dynamic, hands-on way. Library: Chart.js, Vanilla JS.
-        - Report Info: Best practices. Goal: Inform/summarize. Viz: Accordion list. Interaction: Click to expand. Justification: Presents dense info in a compact, organized manner. Library: Vanilla JS.
-        -->
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: A thematic, single-page application with a fixed sidebar for navigation. This non-linear structure is chosen over the report's linear chapter format to allow users (likely developers or architects) to quickly jump to specific topics of interest, such as comparing acknowledgment modes or reviewing performance best practices, without sequential reading. Key interactions include hover-to-reveal details on diagrams, clickable charts to display contextual information, and filterable tables, which enhance learning and usability for a technical audience. -->
+    <!-- Visualization & Content Choices: 
+        - Messaging Models (P2P vs. Pub/Sub): Goal: Compare. Method: Side-by-side HTML/CSS diagram with icons. Interaction: Hover for tooltips. Justification: Visual flow is faster to grasp than text. Library: HTML/CSS.
+        - Acknowledgment Modes: Goal: Compare trade-offs. Method: Interactive Bar Chart. Interaction: Click bar to show detailed info card. Justification: Quantifies reliability vs. performance trade-offs visually. Library: Chart.js.
+        - Delivery Modes: Goal: Compare trade-offs. Method: Doughnut chart. Interaction: Click segment to show details. Justification: Quick visual summary of the core trade-off. Library: Chart.js.
+        - BW Activity Mapping: Goal: Organize/Compare. Method: Searchable HTML table. Interaction: Live text filtering. Justification: A practical, usable tool for developers migrating projects. Library: Vanilla JS.
+        - JMS vs. EMS Features: Goal: Compare. Method: Collapsible list. Interaction: Click to expand details. Justification: Less overwhelming than a large static table. Library: Vanilla JS.
+    -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8f7f4;
-            color: #3a3a3a;
+            font-family: 'Be Vietnam Pro', sans-serif;
+            background-color: #FDFBF7;
+            color: #3D405B;
         }
         .chart-container {
             position: relative;
+            margin: auto;
+            height: 350px;
             width: 100%;
-            height: 300px;
-            max-height: 400px;
+            max-width: 600px;
         }
-        @media (min-width: 768px) {
-            .chart-container {
-                height: 350px;
-            }
+        .active-nav {
+            background-color: #E07A5F;
+            color: #FFFFFF;
         }
-        .nav-link {
-            transition: color 0.3s, border-color 0.3s;
+        .nav-item {
+            transition: all 0.2s ease-in-out;
         }
-        .nav-link:hover, .nav-link.active {
-            color: #e98074;
-            border-bottom-color: #e98074;
+        .nav-item:hover {
+            background-color: #f2a691;
+            color: #FFFFFF;
         }
-        .flowchart-node {
-            transition: all 0.3s ease;
-            cursor: pointer;
+        .content-section {
+            display: none;
         }
-        .flowchart-node:hover {
+        .content-section.active {
+            display: block;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s ease-in-out;
+        }
+        .card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
-        .flowchart-arrow {
-            font-size: 2rem;
-            color: #a3b8c2;
-        }
-        .custom-tab {
-            transition: all 0.3s;
-            border-bottom: 2px solid transparent;
-        }
-        .custom-tab.active {
-            border-bottom-color: #e98074;
-            color: #e98074;
-            font-weight: 600;
-        }
-        .accordion-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.5s ease-out;
+        .tab-button.active {
+            border-color: #E07A5F;
+            background-color: #E07A5F;
+            color: #FFFFFF;
         }
     </style>
 </head>
-<body class="antialiased">
+<body class="flex flex-col md:flex-row min-h-screen">
+    <nav class="w-full md:w-64 bg-[#3D405B] text-white p-4 flex-shrink-0">
+        <h1 class="text-2xl font-bold mb-6 text-center border-b border-gray-500 pb-4">JMS trong TIBCO BW</h1>
+        <ul id="navigation" class="space-y-2">
+            <li><a href="#overview" class="nav-item block py-2 px-4 rounded-lg active-nav">Tổng Quan</a></li>
+            <li><a href="#concepts" class="nav-item block py-2 px-4 rounded-lg">Khái Niệm Cốt Lõi</a></li>
+            <li><a href="#config" class="nav-item block py-2 px-4 rounded-lg">Cấu Hình & Hoạt Động</a></li>
+            <li><a href="#reliability" class="nav-item block py-2 px-4 rounded-lg">Độ Tin Cậy & Giao Dịch</a></li>
+            <li><a href="#comparison" class="nav-item block py-2 px-4 rounded-lg">So Sánh: JMS vs. EMS</a></li>
+            <li><a href="#best-practices" class="nav-item block py-2 px-4 rounded-lg">Thực Hành Tốt Nhất</a></li>
+        </ul>
+    </nav>
 
-    <header class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
-        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex-shrink-0">
-                    <h1 class="text-xl font-bold text-gray-800">🚀 Elastic Log Explorer</h1>
-                </div>
-                <div class="hidden md:block">
-                    <div class="ml-10 flex items-baseline space-x-4">
-                        <a href="#overview" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Tổng quan</a>
-                        <a href="#collection" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Thu thập Log</a>
-                        <a href="#processing" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Xử lý & Lưu trữ</a>
-                        <a href="#analysis" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Phân tích</a>
-                        <a href="#best-practices" class="nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Thực hành tốt nhất</a>
-                    </div>
-                </div>
-                 <div class="md:hidden">
-                    <button id="mobile-menu-button" class="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100">
-                        <span class="sr-only">Open main menu</span>
-                        <div id="hamburger-icon">
-                            <div class="w-6 h-0.5 bg-gray-600 mb-1.5"></div>
-                            <div class="w-6 h-0.5 bg-gray-600 mb-1.5"></div>
-                            <div class="w-6 h-0.5 bg-gray-600"></div>
-                        </div>
-                    </button>
-                </div>
-            </div>
-            <div id="mobile-menu" class="md:hidden hidden pb-3">
-                <a href="#overview" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Tổng quan</a>
-                <a href="#collection" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Thu thập Log</a>
-                <a href="#processing" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Xử lý & Lưu trữ</a>
-                <a href="#analysis" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Phân tích</a>
-                <a href="#best-practices" class="block nav-link text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-base font-medium">Thực hành tốt nhất</a>
-            </div>
-        </nav>
-    </header>
-
-    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto">
         
-        <!-- Section: Overview -->
-        <section id="overview" class="mb-16 md:mb-24 text-center scroll-mt-20">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Hành trình của Dữ liệu Log</h2>
-            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12">Khám phá cách Elastic Stack biến những dòng log thô từ hệ thống của bạn thành những insight giá trị. Mỗi bước trong quy trình đều đóng vai trò quan trọng. Hãy nhấp vào từng giai đoạn để tìm hiểu thêm.</p>
-            <div class="flex flex-col md:flex-row items-center justify-center space-y-8 md:space-y-0 md:space-x-4">
-                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#collection">
-                    <div class="text-4xl mb-3">📄</div>
-                    <h3 class="text-lg font-semibold">1. Thu thập</h3>
-                    <p class="text-sm text-gray-500">Gom log từ mọi nguồn.</p>
-                </div>
-                <div class="flowchart-arrow transform md:rotate-0 rotate-90">→</div>
-                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#processing">
-                    <div class="text-4xl mb-3">⚙️</div>
-                    <h3 class="text-lg font-semibold">2. Xử lý</h3>
-                    <p class="text-sm text-gray-500">Chuẩn hóa & làm giàu dữ liệu.</p>
-                </div>
-                <div class="flowchart-arrow transform md:rotate-0 rotate-90">→</div>
-                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#processing">
-                     <div class="text-4xl mb-3">🗄️</div>
-                    <h3 class="text-lg font-semibold">3. Lưu trữ</h3>
-                    <p class="text-sm text-gray-500">Lập chỉ mục trong Elasticsearch.</p>
-                </div>
-                <div class="flowchart-arrow transform md:rotate-0 rotate-90">→</div>
-                <div class="flowchart-node bg-white p-6 rounded-xl shadow-lg w-full md:w-52" data-target="#analysis">
-                    <div class="text-4xl mb-3">📊</div>
-                    <h3 class="text-lg font-semibold">4. Phân tích</h3>
-                    <p class="text-sm text-gray-500">Trực quan hóa với Kibana.</p>
-                </div>
-            </div>
-        </section>
+        <div id="overview" class="content-section active">
+            <h2 class="text-4xl font-bold text-[#E07A5F] mb-4">Tận dụng Java Message Service (JMS) trong TIBCO BusinessWorks</h2>
+            <p class="mb-8 text-lg text-gray-600">
+                Chào mừng bạn đến với hướng dẫn tương tác về việc sử dụng JMS trong TIBCO BW. Ứng dụng này chuyển đổi một báo cáo kỹ thuật chi tiết thành một trải nghiệm dễ khám phá, cho phép bạn tìm hiểu các khái niệm cốt lõi, so sánh các mô hình và khám phá các phương pháp hay nhất một cách trực quan. Mục tiêu là giúp các nhà phát triển và kiến trúc sư nhanh chóng nắm bắt các khía cạnh quan trọng của việc tích hợp không đồng bộ.
+            </p>
 
-        <!-- Section: Collection -->
-        <section id="collection" class="mb-16 md:mb-24 scroll-mt-20">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Giai đoạn 1: Lựa chọn Công cụ Thu thập Log</h2>
-            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Bước đầu tiên là đưa log từ các hệ thống của bạn vào Elastic. Việc lựa chọn công cụ phù hợp phụ thuộc vào nhu cầu của bạn về hiệu năng và khả năng xử lý.</p>
-            <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="card">
+                <h3 class="text-2xl font-semibold mb-4 text-[#81B29A]">Mô Hình Nhắn Tin Chính</h3>
+                <p class="mb-6 text-gray-600">JMS định nghĩa hai mô hình giao tiếp cơ bản, mỗi mô hình phục vụ cho các mẫu tích hợp khác nhau. Việc lựa chọn đúng mô hình là một quyết định kiến trúc nền tảng.</p>
+                <div class="grid md:grid-cols-2 gap-8">
                     <div>
-                        <h3 class="text-xl font-semibold mb-4">So sánh các Công cụ Thu thập</h3>
-                        <p class="text-gray-600 mb-6">Mỗi công cụ có điểm mạnh riêng. Filebeat nhẹ nhàng, Logstash mạnh mẽ trong xử lý, và Elastic Agent mang đến giải pháp hợp nhất.</p>
-                        <div class="chart-container">
-                            <canvas id="collectorChart"></canvas>
+                        <h4 class="text-xl font-bold mb-2">Point-to-Point (Queue)</h4>
+                        <p class="text-sm text-gray-500 mb-4">Một người gửi, một người nhận. Đảm bảo xử lý một lần.</p>
+                        <div class="bg-gray-50 p-4 rounded-lg text-center">
+                            <div class="flex items-center justify-center space-x-4">
+                                <span class="text-4xl" title="Producer">👤</span>
+                                <span class="text-2xl animate-pulse">→</span>
+                                <div class="relative p-4">
+                                    <span class="text-4xl" title="Queue">📦</span>
+                                    <span class="absolute -top-2 -right-2 text-2xl" title="Message">✉️</span>
+                                </div>
+                                <span class="text-2xl">→</span>
+                                <span class="text-4xl" title="Consumer">👤</span>
+                            </div>
+                            <p class="mt-4 font-semibold">Lý tưởng cho: Xử lý đơn hàng, Giao dịch tài chính</p>
                         </div>
                     </div>
                     <div>
-                        <h3 class="text-xl font-semibold mb-4">Cấu hình Mẫu</h3>
-                        <div class="border-b border-gray-200 mb-4">
-                            <nav class="-mb-px flex space-x-4" aria-label="Tabs">
-                                <button class="custom-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm active" data-tab="filebeat">Filebeat</button>
-                                <button class="custom-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm" data-tab="logstash">Logstash</button>
-                                <button class="custom-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm" data-tab="agent">Elastic Agent</button>
-                            </nav>
-                        </div>
-                        <div id="tab-content">
-                            <!-- Filebeat Content -->
-                            <div class="tab-pane active" id="filebeat-content">
-                                <p class="text-gray-600 mb-4">Filebeat là lựa chọn lý tưởng để chuyển tiếp log từ nhiều máy chủ với tài nguyên tối thiểu. Sử dụng các module để tự động phân tích các định dạng log phổ biến.</p>
-                                <select id="filebeat-log-type" class="w-full p-2 border rounded-md mb-2 bg-gray-50">
-                                    <option value="nginx">Log Nginx</option>
-                                    <option value="apache">Log Apache</option>
-                                    <option value="json">Log JSON Tùy chỉnh</option>
-                                </select>
-                                <pre class="bg-gray-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code id="filebeat-code"></code></pre>
-                            </div>
-                             <!-- Logstash Content -->
-                            <div class="tab-pane hidden" id="logstash-content">
-                                <p class="text-gray-600 mb-4">Logstash là một pipeline xử lý mạnh mẽ, cho phép bạn phân tích, làm giàu và biến đổi log trước khi gửi đến Elasticsearch. Rất linh hoạt nhờ hệ thống plugin phong phú.</p>
-                                <select id="logstash-log-type" class="w-full p-2 border rounded-md mb-2 bg-gray-50">
-                                    <option value="apache">Phân tích Log Apache</option>
-                                    <option value="syslog">Nhận Syslog</option>
-                                    <option value="beats">Nhận từ Filebeat</option>
-                                </select>
-                                <pre class="bg-gray-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code id="logstash-code"></code></pre>
-                            </div>
-                            <!-- Elastic Agent Content -->
-                            <div class="tab-pane hidden" id="agent-content">
-                                <p class="text-gray-600 mb-4">Elastic Agent là một agent hợp nhất cho logs, metrics, và security data. Quản lý tập trung qua Fleet giúp đơn giản hóa việc triển khai và nâng cấp.</p>
-                                <p class="text-gray-600 mb-2">Cấu hình cho Elastic Agent thường được quản lý thông qua giao diện của Kibana (Fleet) thay vì các file YAML tĩnh, giúp đơn giản hóa việc thiết lập cho các dịch vụ phổ biến như Nginx, System, Docker...</p>
-                                <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
-                                    <div class="flex">
-                                        <div class="flex-shrink-0">
-                                            <span class="text-2xl">💡</span>
-                                        </div>
-                                        <div class="ml-3">
-                                            <p class="text-sm text-blue-700">
-                                            Với Elastic Agent, bạn chỉ cần chọn "Integration" (ví dụ: Nginx) trong Fleet, cung cấp đường dẫn log, và Agent sẽ tự động áp dụng cấu hình, pipeline xử lý và dashboard tương ứng.
-                                            </p>
-                                        </div>
-                                    </div>
+                        <h4 class="text-xl font-bold mb-2">Publish/Subscribe (Topic)</h4>
+                        <p class="text-sm text-gray-500 mb-4">Một người gửi, nhiều người nhận. Dùng để phát sóng thông tin.</p>
+                         <div class="bg-gray-50 p-4 rounded-lg text-center">
+                            <div class="flex items-center justify-center space-x-4">
+                                <span class="text-4xl" title="Publisher">👤</span>
+                                <span class="text-2xl animate-pulse">→</span>
+                                <div class="relative p-4">
+                                    <span class="text-4xl" title="Topic">📡</span>
+                                    <span class="absolute -top-2 -right-2 text-2xl" title="Message">✉️</span>
+                                </div>
+                                <span class="text-2xl">→</span>
+                                <div class="flex flex-col space-y-2">
+                                    <span class="text-4xl" title="Subscriber 1">👤</span>
+                                    <span class="text-4xl" title="Subscriber 2">👤</span>
+                                    <span class="text-4xl" title="Subscriber 3">👤</span>
                                 </div>
                             </div>
+                            <p class="mt-4 font-semibold">Lý tưởng cho: Cập nhật giá, Tin tức, Thông báo hệ thống</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <!-- Section: Processing & Storage -->
-        <section id="processing" class="mb-16 md:mb-24 scroll-mt-20">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Giai đoạn 2: Xử lý và Lưu trữ Dữ liệu</h2>
-            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Đây là bước biến dữ liệu thô thành thông tin có cấu trúc. Chúng ta sẽ khám phá cách phân tích log với Grok và quản lý vòng đời dữ liệu với ILM.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- Grok Parser -->
-                <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
-                    <h3 class="text-xl font-semibold mb-4">Thử nghiệm Grok Parser</h3>
-                    <p class="text-gray-600 mb-4">Grok cho phép bạn đặt tên cho các mẫu có sẵn để phân tích cú pháp log. Hãy thử với một dòng log Apache và xem kết quả.</p>
-                    <div class="mb-4">
-                        <label for="grok-input" class="block text-sm font-medium text-gray-700">Dòng Log Mẫu (Apache Common Log)</label>
-                        <textarea id="grok-input" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326</textarea>
-                    </div>
-                    <div class="mb-4">
-                        <label for="grok-pattern" class="block text-sm font-medium text-gray-700">Mẫu Grok</label>
-                         <input id="grok-pattern" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value="%{IPORHOST:clientip} %{USER:ident} %{USER:auth} \[%{HTTPDATE:timestamp}\] \"(?:%{WORD:verb} %{NOTSPACE:request}(?: HTTP/%{NUMBER:httpversion})?|%{DATA:rawrequest})\" %{NUMBER:response:int} (?:-|%{NUMBER:bytes:int})">
-                    </div>
-                    <button id="grok-parse-btn" class="w-full bg-[#d8c3a5] hover:bg-[#c9b494] text-white font-bold py-2 px-4 rounded-lg transition-colors">Phân tích (Parse)</button>
-                    <div class="mt-4">
-                        <h4 class="font-semibold">Kết quả JSON:</h4>
-                        <pre class="bg-gray-800 text-white p-4 rounded-md text-sm overflow-x-auto mt-2"><code id="grok-output">{"message": "Hãy nhấn nút Phân tích"}</code></pre>
-                    </div>
+        <div id="concepts" class="content-section">
+            <h2 class="text-3xl font-bold mb-6 text-[#E07A5F]">Khái Niệm Cốt Lõi của JMS</h2>
+            <p class="mb-8 text-gray-600">Để sử dụng JMS hiệu quả, điều cần thiết là phải hiểu các thành phần xây dựng nên nó. Phần này giới thiệu các đối tượng, cấu trúc thông điệp và các chế độ phân phối tạo nên nền tảng của bất kỳ ứng dụng JMS nào.</p>
+             <div class="grid md:grid-cols-2 gap-6">
+                 <div class="card">
+                    <h3 class="text-xl font-semibold mb-2 text-[#81B29A]">Các Đối Tượng JMS Chính</h3>
+                    <ul class="space-y-2 text-gray-600 list-disc list-inside">
+                        <li><strong class="font-semibold">ConnectionFactory:</strong> Đối tượng quản trị để tạo kết nối đến nhà cung cấp JMS.</li>
+                        <li><strong class="font-semibold">Connection:</strong> Một kết nối đang hoạt động, là nhà máy sản xuất các Session.</li>
+                        <li><strong class="font-semibold">Session:</strong> Một ngữ cảnh đơn luồng để gửi và nhận tin nhắn.</li>
+                        <li><strong class="font-semibold">Destination:</strong> Đại diện cho nơi tin nhắn được gửi đến (Queue hoặc Topic).</li>
+                        <li><strong class="font-semibold">MessageProducer:</strong> Đối tượng để gửi tin nhắn đến một Destination.</li>
+                        <li><strong class="font-semibold">MessageConsumer:</strong> Đối tượng để nhận tin nhắn từ một Destination.</li>
+                    </ul>
                 </div>
-
-                <!-- ILM -->
-                <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
-                    <h3 class="text-xl font-semibold mb-4">Vòng đời Dữ liệu Log (ILM)</h3>
-                    <p class="text-gray-600 mb-6">Dữ liệu log không cần lưu trữ mãi mãi với hiệu năng cao nhất. ILM tự động di chuyển dữ liệu qua các tầng để tối ưu chi phí và hiệu suất. Di chuột qua các giai đoạn để xem chi tiết.</p>
-                    <div class="space-y-4">
-                        <div class="ilm-phase relative p-4 bg-red-100 border-l-4 border-red-500 rounded-r-lg">
-                            <h4 class="font-bold text-red-800">🔥 HOT</h4>
-                            <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
-                                <h5 class="font-bold mb-2">Tối ưu cho Ghi & Truy vấn</h5>
-                                <p class="text-sm text-gray-600">Dữ liệu được ghi và truy vấn liên tục. Yêu cầu hiệu năng cao nhất. Thường lưu trên SSD.</p>
-                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `rollover` (tạo index mới khi đầy).</p>
-                            </div>
-                        </div>
-                        <div class="ilm-phase relative p-4 bg-yellow-100 border-l-4 border-yellow-500 rounded-r-lg">
-                            <h4 class="font-bold text-yellow-800">🌤️ WARM</h4>
-                            <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
-                                <h5 class="font-bold mb-2">Tối ưu cho Lưu trữ</h5>
-                                <p class="text-sm text-gray-600">Dữ liệu ít được truy vấn, chỉ đọc. Có thể chuyển sang phần cứng rẻ hơn.</p>
-                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `shrink` (giảm shard), `forcemerge` (gộp segment).</p>
-                            </div>
-                        </div>
-                        <div class="ilm-phase relative p-4 bg-blue-100 border-l-4 border-blue-500 rounded-r-lg">
-                            <h4 class="font-bold text-blue-800">❄️ COLD</h4>
-                             <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
-                                <h5 class="font-bold mb-2">Lưu trữ Dài hạn</h5>
-                                <p class="text-sm text-gray-600">Dữ liệu rất hiếm khi truy cập. Giảm thiểu tài nguyên sử dụng.</p>
-                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `freeze` (đóng băng index), `searchable snapshots`.</p>
-                            </div>
-                        </div>
-                         <div class="ilm-phase relative p-4 bg-gray-200 border-l-4 border-gray-500 rounded-r-lg">
-                            <h4 class="font-bold text-gray-800">🗑️ DELETE</h4>
-                             <div class="ilm-details absolute left-full ml-4 w-64 bg-white p-4 rounded-lg shadow-xl hidden z-10 border border-gray-200">
-                                <h5 class="font-bold mb-2">Xóa Dữ liệu</h5>
-                                <p class="text-sm text-gray-600">Tự động xóa index sau một khoảng thời gian nhất định để giải phóng dung lượng.</p>
-                                <p class="text-sm text-gray-600 mt-2"><strong>Hành động:</strong> `delete`.</p>
-                            </div>
-                        </div>
+                 <div class="card">
+                    <h3 class="text-xl font-semibold mb-2 text-[#81B29A]">Cấu Trúc Tin Nhắn</h3>
+                    <p class="mb-4 text-gray-600">Mỗi tin nhắn JMS bao gồm ba phần riêng biệt, cho phép giao tiếp có ngữ cảnh phong phú.</p>
+                    <ul class="space-y-2 text-gray-600">
+                        <li><strong class="font-semibold text-gray-700">Header:</strong> Các trường được xác định trước để định tuyến và nhận dạng (ví dụ: `JMSMessageID`, `JMSCorrelationID`).</li>
+                        <li><strong class="font-semibold text-gray-700">Properties:</strong> Siêu dữ liệu tùy chỉnh do ứng dụng xác định (ví dụ: `trackingId`).</li>
+                        <li><strong class="font-semibold text-gray-700">Body:</strong> Tải trọng thực tế của tin nhắn (`TextMessage`, `MapMessage`, `BytesMessage`, v.v.).</li>
+                    </ul>
+                </div>
+                <div class="card col-span-1 md:col-span-2">
+                    <h3 class="text-xl font-semibold mb-2 text-[#81B29A]">Chế Độ Phân Phối: Độ Tin Cậy vs. Hiệu Suất</h3>
+                    <p class="text-gray-600 mb-4">Đây là một sự đánh đổi quan trọng trong thiết kế. Lựa chọn chế độ phù hợp với yêu cầu kinh doanh của bạn.</p>
+                    <div class="chart-container h-72">
+                        <canvas id="deliveryModesChart"></canvas>
                     </div>
+                    <div id="deliveryModeDetails" class="mt-4 text-center p-4 bg-gray-50 rounded-lg hidden"></div>
                 </div>
             </div>
-        </section>
-
-        <!-- Section: Analysis -->
-        <section id="analysis" class="mb-16 md:mb-24 scroll-mt-20">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Giai đoạn 3: Phân tích & Trực quan hóa với Kibana</h2>
-            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Đây là lúc sức mạnh của Elastic Stack tỏa sáng. Khám phá dashboard mô phỏng dưới đây để xem cách dữ liệu log được biến thành các biểu đồ và insight hữu ích.</p>
-            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
-                <div class="flex flex-col md:flex-row items-center p-4 border-b border-gray-200 mb-6 bg-gray-50 rounded-t-lg">
-                     <label for="kibana-filter" class="flex-shrink-0 mr-3 font-semibold text-gray-700">Bộ lọc (KQL):</label>
-                     <select id="kibana-filter" class="w-full md:w-auto p-2 border rounded-md bg-white">
-                         <option value="*">Tất cả Log</option>
-                         <option value="http.response.status_code >= 500">Chỉ Lỗi Server (5xx)</option>
-                         <option value="log.level: ERROR">Chỉ Log Level ERROR</option>
-                         <option value="http.request.method: POST">Chỉ Request POST</option>
-                     </select>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Log Volume -->
-                    <div class="col-span-1 md:col-span-2 lg:col-span-3 bg-gray-50 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-2">Khối lượng Log theo Thời gian</h3>
-                        <div class="chart-container">
-                            <canvas id="logVolumeChart"></canvas>
-                        </div>
-                    </div>
-                    <!-- Status Codes -->
-                    <div class="col-span-1 lg:col-span-1 bg-gray-50 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-2">Phân bổ Mã Trạng thái HTTP</h3>
-                        <div class="chart-container">
-                            <canvas id="statusCodesChart"></canvas>
-                        </div>
-                    </div>
-                    <!-- Log Levels -->
-                     <div class="col-span-1 lg:col-span-1 bg-gray-50 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-2">Phân bổ Cấp độ Log</h3>
-                         <div class="chart-container">
-                            <canvas id="logLevelsChart"></canvas>
-                        </div>
-                    </div>
-                    <!-- Top IPs -->
-                    <div class="col-span-1 lg:col-span-1 bg-gray-50 p-4 rounded-lg">
-                        <h3 class="font-semibold mb-2">Top 5 IP nguồn</h3>
-                        <div id="topIpsTable" class="space-y-2 pt-2"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
+        </div>
         
-        <!-- Section: Best Practices -->
-        <section id="best-practices" class="scroll-mt-20">
-             <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4 text-center">Thực hành Tốt nhất</h2>
-            <p class="max-w-3xl mx-auto text-lg text-gray-600 mb-12 text-center">Để xây dựng một hệ thống phân tích log mạnh mẽ và bền vững, hãy tuân thủ các nguyên tắc cốt lõi sau.</p>
-            <div class="max-w-3xl mx-auto space-y-4">
-                <div class="accordion-item bg-white rounded-lg shadow">
-                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
-                        <span>📝 Ghi Log có Cấu trúc (Structured Logging)</span>
-                        <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
-                    </button>
-                    <div class="accordion-content px-5">
-                        <p class="py-4 text-gray-600">Thay vì ghi log dạng văn bản tự do, hãy sử dụng định dạng có cấu trúc như JSON. Điều này giúp loại bỏ bước phân tích cú pháp phức tạp, làm cho việc lập chỉ mục và tìm kiếm trở nên nhanh hơn và đáng tin cậy hơn rất nhiều. Đây là nền tảng cho một hệ thống logging hiệu quả.</p>
+        <div id="config" class="content-section">
+            <h2 class="text-3xl font-bold mb-6 text-[#E07A5F]">Cấu Hình & Hoạt Động trong BW</h2>
+            <p class="mb-8 text-gray-600">Phần này cung cấp hướng dẫn thực tế về cách thiết lập kết nối JMS và sử dụng các hoạt động (activities) của TIBCO BW để gửi và nhận tin nhắn. Các ví dụ này minh họa cách BW đơn giản hóa các tác vụ tích hợp JMS phổ biến.</p>
+
+            <div class="card">
+                <div class="flex border-b mb-4">
+                    <button class="tab-button py-2 px-4 text-gray-500 border-b-2 font-medium active" data-target="tab-sender">Gửi Tin Nhắn</button>
+                    <button class="tab-button py-2 px-4 text-gray-500 border-b-2 font-medium" data-target="tab-receiver">Nhận Tin Nhắn</button>
+                    <button class="tab-button py-2 px-4 text-gray-500 border-b-2 font-medium" data-target="tab-reqrep">Request-Reply</button>
+                </div>
+
+                <div id="tab-sender" class="tab-content">
+                    <h3 class="text-xl font-semibold mb-2">Gửi tin nhắn (JMS Send Message)</h3>
+                    <p class="mb-4 text-gray-600">Hoạt động `JMS Send Message` trong BWCE/BW6 (hoặc `JMS Queue Sender`/`Topic Publisher` trong BW 5.x) được sử dụng để gửi tin nhắn đến các đích đến (destinations).</p>
+                    <div class="bg-gray-800 text-white p-4 rounded-lg font-mono text-sm">
+                        <p><span class="text-purple-400">Activity</span>: JMS Send Message</p>
+                        <p><span class="text-green-400">  Input</span>:</p>
+                        <p>    - Connection: <span class="text-yellow-400">/SharedResources/JMSConnection.jmsConn</span></p>
+                        <p>    - Destination: <span class="text-yellow-400">"queue.sample.request"</span></p>
+                        <p>    - Messaging Style: <span class="text-yellow-400">Queue</span></p>
+                        <p>    - Body: <span class="text-yellow-400">$MapData/root/message</span></p>
+                        <p>    - Properties:</p>
+                        <p>        - Name: <span class="text-yellow-400">"businessProcessID"</span></p>
+                        <p>        - Value: <span class="text-yellow-400">"PROC-12345"</span></p>
                     </div>
                 </div>
-                 <div class="accordion-item bg-white rounded-lg shadow">
-                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
-                        <span>🏷️ Chuẩn hóa với Elastic Common Schema (ECS)</span>
-                         <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
-                    </button>
-                    <div class="accordion-content px-5">
-                        <p class="py-4 text-gray-600">Áp dụng ECS để chuẩn hóa tên trường trong dữ liệu của bạn (ví dụ: luôn dùng `client.ip` cho địa chỉ IP của client). Điều này giúp bạn dễ dàng tương quan dữ liệu từ các nguồn khác nhau và tận dụng các dashboard, rule được xây dựng sẵn trong Kibana.</p>
+                <div id="tab-receiver" class="tab-content hidden">
+                    <h3 class="text-xl font-semibold mb-2">Nhận tin nhắn (JMS Receive Message)</h3>
+                    <p class="mb-4 text-gray-600">Hoạt động này thường là một trình khởi tạo quy trình (process starter), kích hoạt một tiến trình mới khi có tin nhắn đến.</p>
+                    <div class="bg-gray-800 text-white p-4 rounded-lg font-mono text-sm">
+                        <p><span class="text-purple-400">Process Starter</span>: JMS Receive Message</p>
+                        <p><span class="text-green-400">  Configuration</span>:</p>
+                        <p>    - Connection: <span class="text-yellow-400">/SharedResources/JMSConnection.jmsConn</span></p>
+                        <p>    - Destination: <span class="text-yellow-400">"queue.sample.request"</span></p>
+                        <p>    - Messaging Style: <span class="text-yellow-400">Queue</span></p>
+                        <p>    - Acknowledge Mode: <span class="text-yellow-400">Client</span></p>
+                        <p><span class="text-red-400">  Output</span>:</p>
+                        <p>    - Body: (Nội dung tin nhắn)</p>
+                        <p>    - JMSHeaders: (Các header của JMS)</p>
+                        <p>    - DynamicProperties: (Các thuộc tính ứng dụng)</p>
                     </div>
                 </div>
-                 <div class="accordion-item bg-white rounded-lg shadow">
-                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
-                        <span>🔄 Tự động hóa Vòng đời Dữ liệu (ILM)</span>
-                         <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
-                    </button>
-                    <div class="accordion-content px-5">
-                        <p class="py-4 text-gray-600">Không phải tất cả dữ liệu đều cần được lưu trữ với chi phí và hiệu năng cao nhất. Hãy cấu hình Index Lifecycle Management (ILM) để tự động di chuyển dữ liệu cũ sang các tầng lưu trữ rẻ hơn (Warm, Cold) và cuối cùng là xóa chúng, giúp tiết kiệm chi phí đáng kể.</p>
-                    </div>
-                </div>
-                <div class="accordion-item bg-white rounded-lg shadow">
-                    <button class="accordion-header w-full flex justify-between items-center p-5 text-left font-semibold">
-                        <span>🔐 Bảo mật Hệ thống</span>
-                         <span class="accordion-icon transform transition-transform text-xl text-[#a3b8c2]">+</span>
-                    </button>
-                    <div class="accordion-content px-5">
-                        <p class="py-4 text-gray-600">Bảo vệ dữ liệu log của bạn bằng cách bật xác thực và phân quyền (RBAC). Mã hóa giao tiếp giữa các thành phần trong stack bằng TLS/SSL. Đừng bỏ qua việc che giấu hoặc loại bỏ các thông tin nhạy cảm (PII) khỏi log trước khi lập chỉ mục.</p>
+                <div id="tab-reqrep" class="tab-content hidden">
+                     <h3 class="text-xl font-semibold mb-2">Request-Reply</h3>
+                    <p class="mb-4 text-gray-600">Mẫu này cho phép giao tiếp hai chiều không đồng bộ. Hoạt động `JMS Request Reply` đóng gói logic phức tạp của việc gửi yêu cầu, đợi phản hồi và tương quan tin nhắn.</p>
+                     <div class="bg-gray-800 text-white p-4 rounded-lg font-mono text-sm">
+                        <p><span class="text-purple-400">Activity</span>: JMS Request Reply</p>
+                        <p><span class="text-green-400">  Configuration</span>:</p>
+                        <p>    - Connection: <span class="text-yellow-400">/SharedResources/JMSConnection.jmsConn</span></p>
+                        <p>    - Request Destination: <span class="text-yellow-400">"queue.service.request"</span></p>
+                        <p>    - Reply Destination: (Thường là một hàng đợi tạm thời)</p>
+                        <p>    - Timeout: <span class="text-yellow-400">30000</span> (ms)</p>
+                        <p><span class="text-green-400">  Logic</span>: Tự động quản lý JMSReplyTo và JMSCorrelationID</p>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
+
+        <div id="reliability" class="content-section">
+            <h2 class="text-3xl font-bold mb-6 text-[#E07A5F]">Đảm Bảo Độ Tin Cậy & Tính Toàn Vẹn Giao Dịch</h2>
+            <p class="mb-8 text-gray-600">Trong các hệ thống doanh nghiệp, việc đảm bảo tin nhắn không bị mất và dữ liệu vẫn nhất quán là tối quan trọng. JMS cung cấp các cơ chế mạnh mẽ để đạt được độ tin cậy. Phần này khám phá các chế độ xác nhận và đăng ký bền vững, hai tính năng quan trọng để xây dựng các giải pháp mạnh mẽ.</p>
+            <div class="card mb-6">
+                <h3 class="text-xl font-semibold mb-2 text-[#81B29A]">Chế Độ Xác Nhận (Acknowledgement Modes)</h3>
+                <p class="text-gray-600 mb-4">Các chế độ xác nhận quyết định cách và thời điểm một tin nhắn được coi là đã được tiêu thụ thành công. Sự lựa chọn này ảnh hưởng sâu sắc đến độ tin cậy và hiệu suất.</p>
+                <div class="chart-container">
+                    <canvas id="ackModesChart"></canvas>
+                </div>
+                <div id="ackModeDetails" class="mt-6 p-4 bg-gray-50 rounded-lg hidden"></div>
+            </div>
+            <div class="card">
+                <h3 class="text-xl font-semibold mb-2 text-[#81B29A]">Đăng Ký Bền Vững (Durable Subscriptions)</h3>
+                <p class="text-gray-600 mb-4">Đối với các chủ đề (topics), đăng ký bền vững đảm bảo rằng người đăng ký sẽ nhận được tất cả các tin nhắn, ngay cả khi nó không hoạt động khi tin nhắn được xuất bản. Điều này rất quan trọng đối với việc phát sóng thông tin quan trọng.</p>
+                <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                    <p class="font-bold">Cấu hình chính:</p>
+                    <ul class="list-disc list-inside mt-2 text-gray-700">
+                        <li><strong class="font-semibold">Enable Durable:</strong> Phải được chọn trong hoạt động của người đăng ký.</li>
+                        <li><strong class="font-semibold">Subscription Name:</strong> Một tên duy nhất cho đăng ký.</li>
+                        <li><strong class="font-semibold">Client ID:</strong> PHẢI được đặt một cách duy nhất trên JMS Connection shared resource.</li>
+                    </ul>
+                    <p class="mt-3 text-sm italic"><strong>Lưu ý:</strong> Việc không đặt Client ID một cách nhất quán là một nguyên nhân phổ biến gây mất tin nhắn trong các đăng ký bền vững.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="comparison" class="content-section">
+            <h2 class="text-3xl font-bold mb-6 text-[#E07A5F]">So Sánh: Standard JMS vs. TIBCO EMS</h2>
+            <p class="mb-8 text-gray-600">TIBCO EMS là một nhà cung cấp JMS tuân thủ tiêu chuẩn, nhưng nó cũng cung cấp các phần mở rộng độc quyền mang lại lợi ích về hiệu suất và các tính năng doanh nghiệp nâng cao. Việc hiểu rõ những khác biệt này là rất quan trọng để đưa ra các quyết định kiến trúc sáng suốt, cân bằng giữa tính di động và sức mạnh.</p>
+             <div class="card">
+                <h3 class="text-xl font-semibold mb-4 text-[#81B29A]">So sánh tính năng chính</h3>
+                <div class="space-y-4">
+                     <div>
+                        <button class="comparison-toggle w-full text-left font-semibold p-3 bg-gray-100 rounded-lg flex justify-between items-center">
+                            <span>Chế độ xác nhận (Acknowledgement Modes)</span>
+                            <span>+</span>
+                        </button>
+                        <div class="comparison-content hidden p-4 bg-gray-50 rounded-b-lg">
+                            <strong class="block">Standard JMS:</strong> AUTO, CLIENT, DUPS_OK. Cung cấp các điều khiển cơ bản.
+                            <strong class="block mt-2">TIBCO EMS:</strong> Thêm EXPLICIT_CLIENT (cho từng tin nhắn), NO_ACK (hiệu suất cao), và các biến thể khác. Cung cấp sự kiểm soát chi tiết hơn.
+                        </div>
+                    </div>
+                     <div>
+                        <button class="comparison-toggle w-full text-left font-semibold p-3 bg-gray-100 rounded-lg flex justify-between items-center">
+                            <span>Chế độ phân phối (Delivery Modes)</span>
+                            <span>+</span>
+                        </button>
+                        <div class="comparison-content hidden p-4 bg-gray-50 rounded-b-lg">
+                            <strong class="block">Standard JMS:</strong> PERSISTENT, NON_PERSISTENT. Đánh đổi cơ bản giữa độ tin cậy và hiệu suất.
+                            <strong class="block mt-2">TIBCO EMS:</strong> Thêm chế độ RELIABLE độc quyền, được thiết kế để nhanh hơn PERSISTENT nhưng vẫn đảm bảo độ tin cậy cao.
+                        </div>
+                    </div>
+                     <div>
+                        <button class="comparison-toggle w-full text-left font-semibold p-3 bg-gray-100 rounded-lg flex justify-between items-center">
+                            <span>Tính tương thích với nhà cung cấp</span>
+                            <span>+</span>
+                        </button>
+                        <div class="comparison-content hidden p-4 bg-gray-50 rounded-b-lg">
+                             <strong class="block">Standard JMS:</strong> Hoạt động với bất kỳ nhà cung cấp tuân thủ JMS nào (ví dụ: ActiveMQ, IBM MQ). Đảm bảo tính di động của ứng dụng.
+                            <strong class="block mt-2">TIBCO EMS:</strong> Việc sử dụng các tính năng mở rộng sẽ ràng buộc giải pháp của bạn với TIBCO EMS.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="best-practices" class="content-section">
+            <h2 class="text-3xl font-bold mb-6 text-[#E07A5F]">Thực Hành Tốt Nhất và Tối Ưu Hóa</h2>
+            <p class="mb-8 text-gray-600">Phát triển các giải pháp JMS mạnh mẽ và hiệu suất cao đòi hỏi nhiều hơn là chỉ kết nối các hoạt động. Phần này tóm tắt các nguyên tắc thiết kế, chiến lược điều chỉnh hiệu suất và các kỹ thuật xử lý lỗi toàn diện đã được chứng minh.</p>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div class="card">
+                    <h4 class="font-bold text-lg mb-2 text-[#81B29A]">Nguyên tắc thiết kế</h4>
+                     <ul class="list-disc list-inside space-y-1 text-gray-600">
+                        <li>Sử dụng Scopes để tổ chức logic.</li>
+                        <li>Tái sử dụng logic với Sub-processes.</li>
+                        <li>Externalize cấu hình (ví dụ: tên hàng đợi) vào các thuộc tính mô-đun.</li>
+                        <li>Sử dụng quy ước đặt tên nhất quán.</li>
+                    </ul>
+                </div>
+                 <div class="card">
+                    <h4 class="font-bold text-lg mb-2 text-[#81B29A]">Điều chỉnh hiệu suất</h4>
+                    <ul class="list-disc list-inside space-y-1 text-gray-600">
+                        <li>Chọn Chế độ xác nhận một cách khôn ngoan.</li>
+                        <li>Giữ kích thước tin nhắn nhỏ.</li>
+                        <li>Điều chỉnh luồng của BW Engine (Engine Thread Count) và giới hạn luồng (FlowLimit) trên các trình khởi tạo.</li>
+                        <li>Cấu hình kích thước Heap của JVM một cách thích hợp.</li>
+                    </ul>
+                </div>
+                 <div class="card">
+                    <h4 class="font-bold text-lg mb-2 text-[#81B29A]">Xử lý lỗi</h4>
+                    <ul class="list-disc list-inside space-y-1 text-gray-600">
+                        <li>Sử dụng khối Catch để xử lý ngoại lệ.</li>
+                        <li>Cấu hình Hàng đợi thư chết (Dead Letter Queues - DLQ) cho các tin nhắn "độc".</li>
+                        <li>Triển khai ghi log toàn diện.</li>
+                        <li>Thiết kế người tiêu dùng có tính Idempotent để xử lý việc gửi lại tin nhắn một cách an toàn.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
 
     </main>
 
-    <footer class="bg-gray-800 text-white mt-16 md:mt-24">
-        <div class="container mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center">
-            <p>Tạo ra để khám phá sức mạnh của Elastic Stack.</p>
-        </div>
-    </footer>
-
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const chartColors = {
-                blue: 'rgba(163, 184, 194, 0.7)',
-                tan: 'rgba(216, 195, 165, 0.7)',
-                coral: 'rgba(233, 128, 116, 0.7)',
-                gray: 'rgba(142, 141, 138, 0.7)',
-                blueBorder: 'rgb(163, 184, 194)',
-                tanBorder: 'rgb(216, 195, 165)',
-                coralBorder: 'rgb(233, 128, 116)',
-                grayBorder: 'rgb(142, 141, 138)',
+        document.addEventListener('DOMContentLoaded', function () {
+            const navLinks = document.querySelectorAll('#navigation a');
+            const contentSections = document.querySelectorAll('.content-section');
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+            const comparisonToggles = document.querySelectorAll('.comparison-toggle');
+
+            const navigateTo = (hash) => {
+                if (!hash) hash = '#overview';
+
+                navLinks.forEach(link => {
+                    if (link.getAttribute('href') === hash) {
+                        link.classList.add('active-nav');
+                    } else {
+                        link.classList.remove('active-nav');
+                    }
+                });
+
+                contentSections.forEach(section => {
+                    if ('#' + section.id === hash) {
+                        section.classList.add('active');
+                    } else {
+                        section.classList.remove('active');
+                    }
+                });
             };
             
-            // --- Navigation Logic ---
-            const navLinks = document.querySelectorAll('.nav-link');
-            const sections = document.querySelectorAll('main section');
-            const mobileMenuButton = document.getElementById('mobile-menu-button');
-            const mobileMenu = document.getElementById('mobile-menu');
-
-            mobileMenuButton.addEventListener('click', () => {
-                mobileMenu.classList.toggle('hidden');
-            });
-
             navLinks.forEach(link => {
-                link.addEventListener('click', (e) => {
-                    // For mobile, close menu on click
-                    if (!mobileMenu.classList.contains('hidden')) {
-                         mobileMenu.classList.add('hidden');
-                    }
-                    // Smooth scroll for all nav links
-                    const targetId = link.getAttribute('href');
-                    if (targetId.startsWith('#')) {
-                        e.preventDefault();
-                        document.querySelector(targetId).scrollIntoView({
-                            behavior: 'smooth'
-                        });
-                    }
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    navigateTo(targetId);
+                    window.location.hash = targetId;
                 });
             });
 
-            // Active nav link on scroll
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        navLinks.forEach(link => {
-                            link.classList.remove('active');
-                            if (link.getAttribute('href').substring(1) === entry.target.id) {
-                                link.classList.add('active');
-                            }
-                        });
-                    }
-                });
-            }, { threshold: 0.5 });
-            sections.forEach(section => observer.observe(section));
-            
-            // --- Flowchart Logic ---
-            const flowchartNodes = document.querySelectorAll('.flowchart-node');
-            flowchartNodes.forEach(node => {
-                node.addEventListener('click', () => {
-                    const targetId = node.dataset.target;
-                    document.querySelector(targetId).scrollIntoView({ behavior: 'smooth', block: 'start' });
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const targetId = this.dataset.target;
+                    tabContents.forEach(content => {
+                        if(content.id === targetId) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
                 });
             });
 
-            // --- Collection Section Logic ---
-            const collectorChartCtx = document.getElementById('collectorChart').getContext('2d');
-            new Chart(collectorChartCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Filebeat', 'Logstash', 'Elastic Agent'],
+            comparisonToggles.forEach(toggle => {
+                toggle.addEventListener('click', function() {
+                    const content = this.nextElementSibling;
+                    const icon = this.querySelector('span:last-child');
+                    content.classList.toggle('hidden');
+                    icon.textContent = content.classList.contains('hidden') ? '+' : '-';
+                });
+            });
+
+            navigateTo(window.location.hash);
+
+            const createDeliveryModesChart = () => {
+                const ctx = document.getElementById('deliveryModesChart').getContext('2d');
+                const detailsDiv = document.getElementById('deliveryModeDetails');
+                const data = {
+                    labels: ['Persistent', 'Non-Persistent', 'Reliable (EMS)'],
                     datasets: [{
-                        label: 'Sử dụng tài nguyên',
-                        data: [1, 3, 2], // 1: Low, 2: Medium, 3: High
-                        backgroundColor: chartColors.blue,
-                        borderColor: chartColors.blueBorder,
+                        label: 'Trade-off',
+                        data: [100, 100, 100], 
+                        backgroundColor: ['#81B29A', '#F9C74F', '#E07A5F'],
+                        borderColor: '#FDFBF7',
+                        borderWidth: 4,
+                        hoverOffset: 4
+                    }]
+                };
+
+                const deliveryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label === 'Persistent') return ' Độ tin cậy cao nhất, hiệu suất thấp hơn';
+                                        if (label === 'Non-Persistent') return ' Hiệu suất cao nhất, độ tin cậy thấp hơn';
+                                        if (label === 'Reliable (EMS)') return ' Cân bằng giữa hiệu suất và độ tin cậy';
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                         onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const index = elements[0].index;
+                                const label = data.labels[index];
+                                let detailText = '';
+                                if (label === 'Persistent') {
+                                    detailText = '<strong>Persistent:</strong> Đảm bảo tin nhắn được phân phối "một lần và chỉ một lần". Nhà cung cấp JMS lưu trữ tin nhắn vào bộ nhớ bền vững. Lựa chọn an toàn nhất cho dữ liệu quan trọng.';
+                                } else if (label === 'Non-Persistent') {
+                                    detailText = '<strong>Non-Persistent:</strong> Đảm bảo phân phối "tối đa một lần". Tin nhắn có thể bị mất nếu nhà cung cấp gặp sự cố. Nhanh nhất nhưng kém tin cậy nhất.';
+                                } else if (label === 'Reliable (EMS)') {
+                                    detailText = '<strong>Reliable (EMS):</strong> Chế độ độc quyền của TIBCO. Cung cấp hiệu suất tốt hơn so với Persistent mà không cần xác nhận từ người sản xuất, nhưng vẫn đảm bảo độ tin cậy cao.';
+                                }
+                                detailsDiv.innerHTML = detailText;
+                                detailsDiv.classList.remove('hidden');
+                            }
+                        }
+                    }
+                });
+            };
+            
+            const createAckModesChart = () => {
+                const ctx = document.getElementById('ackModesChart').getContext('2d');
+                const detailsDiv = document.getElementById('ackModeDetails');
+                const data = {
+                    labels: ['AUTO', 'CLIENT', 'DUPS_OK', 'EXPLICIT (EMS)', 'NO_ACK (EMS)'],
+                    datasets: [{
+                        label: 'Độ tin cậy / Kiểm soát',
+                        data: [60, 90, 40, 95, 10],
+                        backgroundColor: '#81B29A',
+                        borderColor: '#6a947e',
                         borderWidth: 1
                     }, {
-                        label: 'Khả năng biến đổi',
-                        data: [1.5, 3, 2.5], // 1: Basic, 2: Medium, 3: Rich
-                        backgroundColor: chartColors.tan,
-                        borderColor: chartColors.tanBorder,
+                        label: 'Hiệu suất',
+                        data: [70, 50, 85, 45, 100],
+                        backgroundColor: '#E07A5F',
+                        borderColor: '#c76850',
                         borderWidth: 1
                     }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value, index, values) {
-                                    const labels = {0: 'Thấp', 1: 'Cơ bản', 2: 'Trung bình', 3: 'Cao/Phong phú'};
-                                    return labels[Math.round(value)] || '';
+                };
+
+                const ackChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Mức độ tương đối' }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                            }
+                        },
+                        onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const index = elements[0].index;
+                                const label = data.labels[index];
+                                let detailText = '';
+                                if (label === 'AUTO') {
+                                    detailText = '<strong>AUTO_ACKNOWLEDGE:</strong> Đơn giản nhất. Session tự động xác nhận. Rủi ro: có thể mất tin nhắn hoặc xử lý trùng lặp nếu consumer gặp sự cố sau khi xử lý nhưng trước khi xác nhận hoàn tất.';
+                                } else if (label === 'CLIENT') {
+                                    detailText = '<strong>CLIENT_ACKNOWLEDGE:</strong> Ứng dụng kiểm soát. Sử dụng hoạt động `Confirm` của BW để xác nhận. An toàn hơn, đảm bảo xử lý hoàn tất trước khi xác nhận.';
+                                } else if (label === 'DUPS_OK') {
+                                    detailText = '<strong>DUPS_OK_ACKNOWLEDGE:</strong> Hiệu suất cao. Session xác nhận "lười biếng", giảm lưu lượng xác nhận. Rủi ro: có khả năng cao gửi lại tin nhắn trùng lặp khi có lỗi.';
+                                } else if (label === 'EXPLICIT (EMS)') {
+                                    detailText = '<strong>TIBCO EMS EXPLICIT_CLIENT_ACKNOWLEDGE:</strong> Kiểm soát chi tiết. Chỉ xác nhận một tin nhắn cụ thể, không phải tất cả các tin nhắn đã nhận. Hữu ích cho xử lý song song.';
+                                } else if (label === 'NO_ACK (EMS)') {
+                                    detailText = '<strong>TIBCO EMS NO_ACKNOWLEDGE:</strong> Hiệu suất tối đa. Không có xác nhận nào được gửi. Máy chủ coi như đã gửi xong và loại bỏ tin nhắn. Không có đảm bảo gửi lại.';
                                 }
+                                detailsDiv.innerHTML = detailText;
+                                detailsDiv.classList.remove('hidden');
                             }
                         }
-                    },
-                    plugins: {
-                       tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    const value = context.parsed.y;
-                                    const labels = {
-                                        'Sử dụng tài nguyên': {1: 'Thấp', 2: 'Trung bình', 3: 'Cao'},
-                                        'Khả năng biến đổi': {1.5: 'Cơ bản', 2.5: 'Trung bình', 3: 'Phong phú'}
-                                    }
-                                    label += labels[context.dataset.label][value];
-                                    return label;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            const tabs = document.querySelectorAll('.custom-tab');
-            const tabPanes = document.querySelectorAll('.tab-pane');
-            tabs.forEach(tab => {
-                tab.addEventListener('click', () => {
-                    tabs.forEach(t => t.classList.remove('active'));
-                    tab.classList.add('active');
-                    const targetPaneId = tab.dataset.tab + '-content';
-                    tabPanes.forEach(pane => {
-                        if (pane.id === targetPaneId) {
-                            pane.classList.remove('hidden');
-                            pane.classList.add('active');
-                        } else {
-                            pane.classList.add('hidden');
-                            pane.classList.remove('active');
-                        }
-                    });
-                });
-            });
-
-            const filebeatCodeSnippets = {
-                nginx: `filebeat.modules:
-- module: nginx
-  access:
-    enabled: true
-    var.paths: ["/var/log/nginx/access.log*"]
-  error:
-    enabled: true
-    var.paths: ["/var/log/nginx/error.log*"]
-
-output.elasticsearch:
-  hosts: ["es-host:9200"]`,
-                apache: `filebeat.modules:
-- module: apache
-  access:
-    enabled: true
-    var.paths: ["/var/log/apache2/access.log*"]
-  error:
-    enabled: true
-    var.paths: ["/var/log/apache2/error.log*"]
-
-output.elasticsearch:
-  hosts: ["es-host:9200"]`,
-                json: `filebeat.inputs:
-- type: log
-  paths:
-    - /var/log/my_app/json.log
-  processors:
-    - decode_json_fields:
-        fields: ["message"]
-        target: ""
-
-output.elasticsearch:
-  hosts: ["es-host:9200"]`
-            };
-            const filebeatLogType = document.getElementById('filebeat-log-type');
-            const filebeatCode = document.getElementById('filebeat-code');
-            filebeatLogType.addEventListener('change', (e) => {
-                filebeatCode.textContent = filebeatCodeSnippets[e.target.value];
-            });
-            filebeatCode.textContent = filebeatCodeSnippets.nginx;
-
-            const logstashCodeSnippets = {
-                apache: `input {
-  beats {
-    port => 5044
-  }
-}
-filter {
-  grok {
-    match => { "message" => "%{COMBINEDAPACHELOG}" }
-  }
-  geoip {
-    source => "clientip"
-  }
-}
-output {
-  elasticsearch {
-    hosts => ["http://es-host:9200"]
-    index => "weblogs-%{+YYYY.MM.dd}"
-  }
-}`,
-                syslog: `input {
-  syslog {
-    port => 514
-    type => "syslog"
-  }
-}
-filter {
-  grok {
-    match => { "message" => "<%{POSINT:syslog_pri}>%{SYSLOGTIMESTAMP:syslog_timestamp} %{DATA:syslog_program}: %{GREEDYDATA:syslog_message}" }
-  }
-}
-output {
-  elasticsearch {
-    hosts => ["http://es-host:9200"]
-    index => "syslog-%{+YYYY.MM.dd}"
-  }
-}`,
-                beats: `input {
-  beats {
-    port => 5044
-  }
-}
-# ... filter section depends on data from Beats ...
-filter {
-  if [fileset][name] == "nginx" {
-     # Nginx specific processing
-  }
-}
-output {
-  elasticsearch {
-    hosts => ["http://es-host:9200"]
-  }
-}`
-            };
-            const logstashLogType = document.getElementById('logstash-log-type');
-            const logstashCode = document.getElementById('logstash-code');
-            logstashLogType.addEventListener('change', (e) => {
-                logstashCode.textContent = logstashCodeSnippets[e.target.value];
-            });
-            logstashCode.textContent = logstashCodeSnippets.apache;
-
-            // --- Processing Section Logic ---
-            const grokInput = document.getElementById('grok-input');
-            const grokPattern = document.getElementById('grok-pattern');
-            const grokParseBtn = document.getElementById('grok-parse-btn');
-            const grokOutput = document.getElementById('grok-output');
-
-            grokParseBtn.addEventListener('click', () => {
-                // This is a simplified simulation
-                const log = grokInput.value;
-                if (log.includes('GET /apache_pb.gif HTTP/1.0')) {
-                    const result = {
-                        "clientip": "127.0.0.1",
-                        "ident": "-",
-                        "auth": "frank",
-                        "timestamp": "10/Oct/2000:13:55:36 -0700",
-                        "verb": "GET",
-                        "request": "/apache_pb.gif",
-                        "httpversion": "1.0",
-                        "response": 200,
-                        "bytes": 2326
-                    };
-                    grokOutput.textContent = JSON.stringify(result, null, 2);
-                } else {
-                    grokOutput.textContent = JSON.stringify({ "error": "Mẫu Grok không khớp với log đầu vào. Đây là một ví dụ mô phỏng." }, null, 2);
-                }
-            });
-
-            const ilmPhases = document.querySelectorAll('.ilm-phase');
-            ilmPhases.forEach(phase => {
-                const details = phase.querySelector('.ilm-details');
-                phase.addEventListener('mouseenter', () => {
-                    details.classList.remove('hidden');
-                });
-                phase.addEventListener('mouseleave', () => {
-                    details.classList.add('hidden');
-                });
-            });
-
-
-            // --- Analysis Section Logic ---
-            let logVolumeChart, statusCodesChart, logLevelsChart;
-            const kibanaFilter = document.getElementById('kibana-filter');
-
-            // Sample Data
-            const baseData = [
-                { time: '10:00', total: 120, status: {200: 100, 404: 15, 500: 5}, level: {INFO: 110, WARN: 5, ERROR: 5}, ip: '203.0.113.10', method: 'GET'},
-                { time: '10:05', total: 150, status: {200: 130, 404: 18, 503: 2}, level: {INFO: 140, WARN: 8, ERROR: 2}, ip: '198.51.100.25', method: 'GET'},
-                { time: '10:10', total: 135, status: {200: 110, 301: 20, 500: 5}, level: {INFO: 125, WARN: 5, ERROR: 5}, ip: '203.0.113.10', method: 'POST'},
-                { time: '10:15', total: 180, status: {200: 165, 404: 10, 500: 5}, level: {INFO: 170, WARN: 5, ERROR: 5}, ip: '192.0.2.44', method: 'GET'},
-                { time: '10:20', total: 250, status: {200: 220, 404: 25, 503: 5}, level: {INFO: 240, WARN: 5, ERROR: 5}, ip: '203.0.113.10', method: 'GET'},
-                { time: '10:25', total: 160, status: {200: 150, 404: 8, 500: 2}, level: {INFO: 150, WARN: 8, ERROR: 2}, ip: '198.51.100.25', method: 'POST'}
-            ];
-
-            const filterData = (filter) => {
-                if (filter === '*') return baseData;
-                if (filter === 'http.response.status_code >= 500') {
-                    return baseData.map(d => ({
-                        ...d, 
-                        total: (d.status['500'] || 0) + (d.status['503'] || 0)
-                    })).filter(d => d.total > 0);
-                }
-                if (filter === 'log.level: ERROR') {
-                    return baseData.map(d => ({...d, total: d.level.ERROR || 0})).filter(d => d.total > 0);
-                }
-                 if (filter === 'http.request.method: POST') {
-                    return baseData.filter(d => d.method === 'POST');
-                }
-                return baseData;
-            };
-
-            const updateCharts = (filter) => {
-                const data = filterData(filter);
-                
-                // Aggregate data for charts
-                const labels = data.map(d => d.time);
-                const volumeData = data.map(d => d.total);
-                
-                const statusCounts = data.reduce((acc, curr) => {
-                    for (const code in curr.status) {
-                        acc[code] = (acc[code] || 0) + curr.status[code];
-                    }
-                    return acc;
-                }, {});
-                
-                const levelCounts = data.reduce((acc, curr) => {
-                    for (const level in curr.level) {
-                        acc[level] = (acc[level] || 0) + curr.level[level];
-                    }
-                    return acc;
-                }, {});
-
-                const ipCounts = data.reduce((acc, curr) => {
-                    acc[curr.ip] = (acc[curr.ip] || 0) + 1;
-                    return acc;
-                }, {});
-                const topIps = Object.entries(ipCounts).sort(([,a],[,b]) => b-a).slice(0, 5);
-
-                // Update Log Volume Chart
-                logVolumeChart.data.labels = labels;
-                logVolumeChart.data.datasets[0].data = volumeData;
-                logVolumeChart.update();
-                
-                // Update Status Codes Chart
-                statusCodesChart.data.labels = Object.keys(statusCounts);
-                statusCodesChart.data.datasets[0].data = Object.values(statusCounts);
-                statusCodesChart.update();
-
-                // Update Log Levels Chart
-                logLevelsChart.data.labels = Object.keys(levelCounts);
-                logLevelsChart.data.datasets[0].data = Object.values(levelCounts);
-                logLevelsChart.data.datasets[0].backgroundColor = Object.keys(levelCounts).map(level => {
-                    if (level === 'ERROR') return chartColors.coral;
-                    if (level === 'WARN') return chartColors.tan;
-                    return chartColors.blue;
-                });
-                logLevelsChart.update();
-
-                // Update Top IPs Table
-                const topIpsTable = document.getElementById('topIpsTable');
-                topIpsTable.innerHTML = '';
-                topIps.forEach(([ip, count]) => {
-                    const row = document.createElement('div');
-                    row.className = 'flex justify-between items-center text-sm p-2 rounded bg-white';
-                    row.innerHTML = `<span class="font-mono text-gray-700">${ip}</span><span class="font-semibold text-[#3a3a3a]">${count} requests</span>`;
-                    topIpsTable.appendChild(row);
-                });
-                if (topIps.length === 0) {
-                     topIpsTable.innerHTML = '<p class="text-sm text-gray-500 text-center p-4">Không có dữ liệu cho bộ lọc này.</p>';
-                }
-            };
-
-            const initCharts = () => {
-                // Log Volume Chart
-                const logVolumeCtx = document.getElementById('logVolumeChart').getContext('2d');
-                logVolumeChart = new Chart(logVolumeCtx, {
-                    type: 'line',
-                    data: { labels: [], datasets: [{ label: 'Số lượng Log', data: [], borderColor: chartColors.blueBorder, backgroundColor: chartColors.blue, tension: 0.1, fill: true }] },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-                });
-
-                // Status Codes Chart
-                const statusCtx = document.getElementById('statusCodesChart').getContext('2d');
-                statusCodesChart = new Chart(statusCtx, {
-                    type: 'doughnut',
-                    data: { labels: [], datasets: [{ label: 'Mã Trạng thái', data: [], backgroundColor: [chartColors.blue, chartColors.tan, chartColors.coral, chartColors.gray] }] },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
-
-                // Log Levels Chart
-                const levelCtx = document.getElementById('logLevelsChart').getContext('2d');
-                logLevelsChart = new Chart(levelCtx, {
-                    type: 'pie',
-                    data: { labels: [], datasets: [{ label: 'Cấp độ Log', data: [], backgroundColor: [] }] },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
-                
-                updateCharts('*');
-            };
-
-            kibanaFilter.addEventListener('change', (e) => {
-                updateCharts(e.target.value);
-            });
-            
-            initCharts();
-
-            // --- Accordion Logic ---
-            const accordionItems = document.querySelectorAll('.accordion-item');
-            accordionItems.forEach(item => {
-                const header = item.querySelector('.accordion-header');
-                const content = item.querySelector('.accordion-content');
-                const icon = item.querySelector('.accordion-icon');
-                header.addEventListener('click', () => {
-                    const isOpen = !content.style.maxHeight || content.style.maxHeight === '0px';
-                    // Close all others
-                    accordionItems.forEach(otherItem => {
-                        if (otherItem !== item) {
-                            otherItem.querySelector('.accordion-content').style.maxHeight = '0px';
-                            otherItem.querySelector('.accordion-icon').textContent = '+';
-                            otherItem.querySelector('.accordion-icon').classList.remove('rotate-45');
-                        }
-                    });
-
-                    if (isOpen) {
-                        content.style.maxHeight = content.scrollHeight + 'px';
-                        icon.textContent = '−';
-                        icon.classList.add('rotate-45');
-                    } else {
-                        content.style.maxHeight = '0px';
-                        icon.textContent = '+';
-                        icon.classList.remove('rotate-45');
                     }
                 });
-            });
+            };
 
+            if (document.getElementById('deliveryModesChart')) {
+                createDeliveryModesChart();
+            }
+            if (document.getElementById('ackModesChart')) {
+                createAckModesChart();
+            }
         });
     </script>
 </body>
